@@ -1,3 +1,5 @@
+-- for repeated use, we can just run this file in the beginning
+
 DROP TABLE IF EXISTS game_action;
 DROP TABLE IF EXISTS trade;
 DROP TABLE IF EXISTS player_state;
@@ -30,18 +32,18 @@ CREATE TABLE account (
 CREATE TABLE game_state (
     game_id bigint DEFAULT nextval('game_id_seq'),
     turn_number bigint DEFAULT nextval('turn_number_seq'),
+    board_state jsonb DEFAULT '{}', 
     winner_id bigint,
-    robber_location bigint,
+    robber_location jsonb DEFAULT '{"hex": "desert"}',
     is_game_over boolean DEFAULT FALSE,
     PRIMARY KEY (game_id, turn_number),
-    FOREIGN KEY (winner_id) REFERENCES account(account_id),
-    UNIQUE (game_id, turn_number)
+    FOREIGN KEY (winner_id) REFERENCES account(account_id)
 );
 
 CREATE TABLE bank_cards_remaining (
     game_id bigint,
     turn_number bigint,
-    brick bigint DEFAULT 19, 
+    brick bigint DEFAULT 19, --hardcoded from catan rulebook
     ore bigint DEFAULT 19,
     sheep bigint DEFAULT 19,
     wheat bigint DEFAULT 19,
