@@ -9,12 +9,12 @@ public class JDBCExecutor {
 
     public static void main(String... args) {
         DatabaseConnectionManager dcm = new DatabaseConnectionManager("localhost",
-                "rps", "postgres", "password");
+                "catan", "postgres", "password");
 
         try {
             Connection connection = dcm.getConnection();
             Statement statement = connection.createStatement();
-            ResultSet resultSet = statement.executeQuery("SELECT COUNT(*) FROM player");
+            ResultSet resultSet = statement.executeQuery("SELECT COUNT(*) FROM account");
             while(resultSet.next()){
                 System.out.println(resultSet.getInt(1));
             }
