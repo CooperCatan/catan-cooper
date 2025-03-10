@@ -1,6 +1,6 @@
-package com.catan.dao.dto;
+package com.catan;
 
-import com.catan.dao.util.DataTransferObject;
+import com.catan.util.DataTransferObject;
 
 public class Account implements DataTransferObject {
     private long accountId;
@@ -16,19 +16,24 @@ public class Account implements DataTransferObject {
         return accountId;
     }
 
-    // Getters and Setters
     public long getAccountId() { return accountId; }
     public void setAccountId(long accountId) { this.accountId = accountId; }
+
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
+
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
+
     public long getTotalWins() { return totalWins; }
     public void setTotalWins(long totalWins) { this.totalWins = totalWins; }
+
     public long getTotalLosses() { return totalLosses; }
     public void setTotalLosses(long totalLosses) { this.totalLosses = totalLosses; }
+
     public long getTotalGames() { return totalGames; }
     public void setTotalGames(long totalGames) { this.totalGames = totalGames; }
+    
     public long getElo() { return elo; }
     public void setElo(long elo) { this.elo = elo; }
 

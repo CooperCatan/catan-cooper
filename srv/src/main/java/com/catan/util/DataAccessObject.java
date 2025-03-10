@@ -15,7 +15,6 @@ public abstract class DataAccessObject <T extends DataTransferObject> {
     }
 
 
-
     public abstract T findById(long id);
 
     public abstract T create(T dto);
