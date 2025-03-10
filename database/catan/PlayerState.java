@@ -1,6 +1,6 @@
-package com.catan;
+package catan;
 
-import com.catan.util.DataTransferObject;
+import catan.util.DataTransferObject;
 
 public class PlayerState implements DataTransferObject {
     private long accountId;

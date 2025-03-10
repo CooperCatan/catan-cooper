@@ -1,6 +1,6 @@
-package com.catan;
+package catan;
 
-import com.catan.util.DataTransferObject;
+import catan.util.DataTransferObject;
 import org.json.JSONObject;
 
 public class GameState implements DataTransferObject {

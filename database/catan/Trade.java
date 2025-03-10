@@ -1,6 +1,6 @@
-package com.catan;
+package catan;
 
-import com.catan.util.DataTransferObject;
+import catan.util.DataTransferObject;
 
 public class Trade implements DataTransferObject {
     private long tradeId;

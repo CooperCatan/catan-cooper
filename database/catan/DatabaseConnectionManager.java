@@ -1,4 +1,4 @@
-package com.catan;
+package catan;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
