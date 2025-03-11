@@ -5,17 +5,12 @@ VALUES
 ('IsaacS', 'bestatcatan', 4, 2, 6, 1250),
 ('IsaacM', 'stonenotore', 2, 5, 7, 1100);
 
-INSERT INTO game_state (game_id, turn_number, winner_id, robber_location, is_game_over)
+INSERT INTO game_state (game_id, turn_number, winner_id, robber_location, is_game_over, bank_brick, bank_ore, bank_sheep, bank_wheat, bank_wood, bank_year_of_plenty, bank_monopoly, bank_road_building, bank_victory_point, bank_knight)
 VALUES
-(1, 1, NULL, 1, FALSE),
-(2, 1, 1, 2, TRUE);
+(1, 1, NULL, '{"hex": "desert"}', FALSE, 19, 19, 19, 19, 19, 2, 2, 1, 5, 14),
+(2, 1, 1, '{"hex": "desert"}', TRUE, 19, 19, 19, 19, 19, 1, 2, 2, 5, 14);
 
-INSERT INTO bank_cards_remaining (game_id, turn_number, brick, ore, sheep, wheat, wood, year_of_plenty, monopoly, road_building, victory_point, knight)
-VALUES
-(1, 1, 19, 19, 19, 19, 19, 2, 2, 1, 5, 14),
-(2, 1, 19, 19, 19, 19, 19, 1, 2, 2, 5, 14);
-
-INSERT INTO player_state (account_id, game_id, turn_number, ore, sheep, wheat, wood, brick, victory_point, knight, num_settlements, num_roads)
+INSERT INTO player_state (account_id, game_id, turn_number, hand_ore, hand_sheep, hand_wheat, hand_wood, hand_brick, hand_victory_point, hand_knight, num_settlements, num_roads)
 VALUES
 (1, 1, 1, 2, 1, 3, 2, 1, 0, 1, 2, 3),
 (2, 1, 1, 1, 2, 1, 3, 2, 0, 0, 1, 2),
@@ -30,4 +25,4 @@ VALUES
 INSERT INTO game_action (game_id, turn_number, action_type)
 VALUES
 (1, 1, 'ROLL_DICE'),
-(2, 1, 'BUILD_SETTLEMENT'); 
+(2, 1, 'BUILD_SETTLEMENT');
