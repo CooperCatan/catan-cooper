@@ -18,8 +18,13 @@ class Vertex {
 
     public void addEdge(Vertex vertex) {
         Edge newEdge = new Edge(this, vertex, false, -1);
-        this.adjacentEdges.add(newEdge);
-        vertex.adjacentEdges.add(newEdge);
+        if(this.adjacentEdges.contains(newEdge) || vertex.adjacentEdges.contains(newEdge)) {
+            //Do nothing
+        } else {
+            //Add it to the list of both
+            this.adjacentEdges.add(newEdge);
+            vertex.adjacentEdges.add(newEdge);
+        }
     }
 
     public int getId() {

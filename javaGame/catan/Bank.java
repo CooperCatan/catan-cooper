@@ -16,7 +16,7 @@ public class Bank {
     private int knights;
     private int monopoly;
     private int yop;
-    private int vp;
+    private int vpCards;
     private int freeRoads;
 
     //The random seed for the deck
@@ -32,7 +32,7 @@ public class Bank {
         this.knights = 14;
         this.monopoly = 2;
         this.yop = 2;
-        this.vp = 5;
+        this.vpCards = 5;
         this.freeRoads = 2;
 
         this.random = new Random();
@@ -91,7 +91,7 @@ public class Bank {
         for (int i = 0; i < this.knights; i++) weightedDeck.add(1);
         for (int i = 0; i < this.monopoly; i++) weightedDeck.add(2);
         for (int i = 0; i < this.yop; i++) weightedDeck.add(3);
-        for (int i = 0; i < this.vp; i++) weightedDeck.add(4);
+        for (int i = 0; i < this.vpCards; i++) weightedDeck.add(4);
         for (int i = 0; i < this.freeRoads; i++) weightedDeck.add(5);
 
         if (weightedDeck.isEmpty()) {
@@ -106,7 +106,7 @@ public class Bank {
             case 1 -> this.knights--;
             case 2 -> this.monopoly--;
             case 3 -> this.yop--;
-            case 4 -> this.vp--;
+            case 4 -> this.vpCards--;
             case 5 -> this.freeRoads--;
         }
 

@@ -31,7 +31,7 @@ class Edge {
 
     public void setRoad(int playerId) {
         if(this.hasRoad) {
-            System.out.println("Road already exists");
+            System.out.println("Road already exists between " + this.vertex1.getId() + " and " + this.vertex2.getId());
         } else {
             this.hasRoad = true;
             this.playerId = playerId;
