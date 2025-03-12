@@ -35,11 +35,4 @@ public class GameAction implements DataTransferObject {
     public void setActionType(String actionType) {
         this.actionType = actionType;
     }
-<<<<<<< HEAD
-
-
-
-=======
-    
->>>>>>> d2ee9a4 (fix project struct, add empty DAO files)
 }
