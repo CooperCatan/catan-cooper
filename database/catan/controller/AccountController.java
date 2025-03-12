@@ -1,36 +1,97 @@
-// spring boot controller for catan webservice
-// will contain all the API endpoints
-// this must be done last after all DAOs are created
+package com.example.catan.controller;
 
-package catan.controller;
-
-import catan.*;
+import com.example.catan.Account;
+import com.example.catan.AccountDAO;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.sql.Connection;
-import java.sql.SQLException;
-
-
-@CrossOrigin
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/accounts")
+public class AccountController {
 
-public class WebServiceController {
+    private final AccountDAO accountDAO;
 
-    @GetMapping("/player/{id}")
-    public Player getPlayer(@PathVariable long id){
-        System.out.println("Getting player with id: " + id);
-        DatabaseConnectionManager dcm = new DatabaseConnectionManager("localhost","catan","postgres","password");
-
-        try(Connection connection = dcm.getConnection()){
-            PlayerDAO playerDAO = new PlayerDAO(connection);
-            return playerDAO.read(id);
-        } catch (SQLException e){
-            e.printStackTrace();
-            return null;
-        }
+    @Autowired
+    public AccountController(AccountDAO accountDAO) {
+        this.accountDAO = accountDAO;
     }
-    
+
+    // Create a new account
+    @PostMapping
+    public ResponseEntity<Account> createAccount(@RequestBody Account account) {
+        Account createdAccount = accountDAO.create(account);
+        return ResponseEntity.ok(createdAccount);
+    }
+
+    // Get an account by ID
+    @GetMapping("/{id}")
+    public ResponseEntity<Account> getAccountById(@PathVariable Long id) {
+        Account account = accountDAO.findById(id);
+        if (account == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(account);
+    }
+
+    // Update username
+    @PutMapping("/{id}/username")
+    public ResponseEntity<Account> updateUsername(@PathVariable Long id, @RequestBody String username) {
+        Account account = accountDAO.findById(id);
+        if (account == null) {
+            return ResponseEntity.notFound().build();
+        }
+        account.setUsername(username);
+        accountDAO.updateUsername(account);
+        return ResponseEntity.ok(account);
+    }
+
+    // Update password
+    @PutMapping("/{id}/password")
+    public ResponseEntity<Account> updatePassword(@PathVariable Long id, @RequestBody String password) {
+        Account account = accountDAO.findById(id);
+        if (account == null) {
+            return ResponseEntity.notFound().build();
+        }
+        account.setPassword(password);
+        accountDAO.updatePassword(account);
+        return ResponseEntity.ok(account);
+    }
+
+    // Update ELO
+    @PutMapping("/{id}/elo")
+    public ResponseEntity<Account> updateElo(@PathVariable Long id, @RequestBody Long elo) {
+        Account account = accountDAO.findById(id);
+        if (account == null) {
+            return ResponseEntity.notFound().build();
+        }
+        account.setElo(elo);
+        accountDAO.updateElo(account);
+        return ResponseEntity.ok(account);
+    }
+
+    // Update all fields
+    @PutMapping("/{id}")
+    public ResponseEntity<Account> updateAccount(@PathVariable Long id, @RequestBody Account updatedAccount) {
+        Account account = accountDAO.findById(id);
+        if (account == null) {
+            return ResponseEntity.notFound().build();
+        }
+        account.setUsername(updatedAccount.getUsername());
+        account.setPassword(updatedAccount.getPassword());
+        account.setElo(updatedAccount.getElo());
+        accountDAO.update(account);
+        return ResponseEntity.ok(account);
+    }
+
+    // Delete an account
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteAccount(@PathVariable Long id) {
+        Account account = accountDAO.findById(id);
+        if (account == null) {
+            return ResponseEntity.notFound().build();
+        }
+        accountDAO.delete(account);
+        return ResponseEntity.ok().build();
+    }
 }
-    
-    
