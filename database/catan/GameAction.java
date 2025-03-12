@@ -35,7 +35,4 @@ public class GameAction implements DataTransferObject {
     public void setActionType(String actionType) {
         this.actionType = actionType;
     }
-
-
-
 }
