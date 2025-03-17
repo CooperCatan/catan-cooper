@@ -1,4 +1,4 @@
-package com.catan;
+package catan.util;
 
 public interface DataTransferObject {
 
