@@ -5,37 +5,33 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 
 public class Account implements DataTransferObject {
-    private long accountId;
+    private long id;
     private String username;
     private String password;
     private long totalWins;
     private long totalLosses;
     private long totalGames;
-    private long elo;
+    private int elo;
 
     public Account() {}
 
     public Account(ResultSet rs) throws SQLException {
-        this.accountId = rs.getLong("account_id");
+        this.id = rs.getLong("account_id");
         this.username = rs.getString("username");
         this.password = rs.getString("password");
         this.totalWins = rs.getLong("total_wins");
         this.totalLosses = rs.getLong("total_losses");
         this.totalGames = rs.getLong("total_games");
-        this.elo = rs.getLong("elo");
+        this.elo = rs.getInt("elo");
     }
 
     @Override
     public long getId() {
-        return accountId;
+        return id;
     }
 
-    public long getAccountId() {
-        return accountId;
-    }
-
-    public void setAccountId(long accountId) {
-        this.accountId = accountId;
+    public void setId(long id) {
+        this.id = id;
     }
 
     public String getUsername() {
@@ -78,18 +74,18 @@ public class Account implements DataTransferObject {
         this.totalGames = totalGames;
     }
 
-    public long getElo() {
+    public int getElo() {
         return elo;
     }
 
-    public void setElo(long elo) {
+    public void setElo(int elo) {
         this.elo = elo;
     }
 
     @Override
     public String toString() {
         return "Account{" +
-                "accountId=" + accountId +
+                "id=" + id +
                 ", username='" + username + '\'' +
                 ", totalWins=" + totalWins +
                 ", totalLosses=" + totalLosses +

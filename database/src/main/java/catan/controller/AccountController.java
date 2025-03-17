@@ -1,7 +1,7 @@
-package com.example.catan.controller;
+package catan.controller;
 
-import com.example.catan.Account;
-import com.example.catan.AccountDAO;
+import catan.Account;
+import catan.AccountDAO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,14 +17,12 @@ public class AccountController {
         this.accountDAO = accountDAO;
     }
 
-    // Create a new account
     @PostMapping
     public ResponseEntity<Account> createAccount(@RequestBody Account account) {
         Account createdAccount = accountDAO.create(account);
         return ResponseEntity.ok(createdAccount);
     }
 
-    // Get an account by ID
     @GetMapping("/{id}")
     public ResponseEntity<Account> getAccountById(@PathVariable Long id) {
         Account account = accountDAO.findById(id);
@@ -34,7 +32,6 @@ public class AccountController {
         return ResponseEntity.ok(account);
     }
 
-    // Update username
     @PutMapping("/{id}/username")
     public ResponseEntity<Account> updateUsername(@PathVariable Long id, @RequestBody String username) {
         Account account = accountDAO.findById(id);
@@ -46,7 +43,6 @@ public class AccountController {
         return ResponseEntity.ok(account);
     }
 
-    // Update password
     @PutMapping("/{id}/password")
     public ResponseEntity<Account> updatePassword(@PathVariable Long id, @RequestBody String password) {
         Account account = accountDAO.findById(id);
@@ -58,7 +54,6 @@ public class AccountController {
         return ResponseEntity.ok(account);
     }
 
-    // Update ELO
     @PutMapping("/{id}/elo")
     public ResponseEntity<Account> updateElo(@PathVariable Long id, @RequestBody Long elo) {
         Account account = accountDAO.findById(id);
@@ -70,7 +65,6 @@ public class AccountController {
         return ResponseEntity.ok(account);
     }
 
-    // Update all fields
     @PutMapping("/{id}")
     public ResponseEntity<Account> updateAccount(@PathVariable Long id, @RequestBody Account updatedAccount) {
         Account account = accountDAO.findById(id);
@@ -84,7 +78,6 @@ public class AccountController {
         return ResponseEntity.ok(account);
     }
 
-    // Delete an account
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteAccount(@PathVariable Long id) {
         Account account = accountDAO.findById(id);
