@@ -42,7 +42,7 @@ public class GameAction implements DataTransferObject {
     }
 
     public void executeAction(String action) {
-        //The following code to find the GameState and PlayerState has been supplied by ChatGPT
+        //The following code to find the GameState and PlayerState has been supplied by Github Copilot
         GameState gameState = gameStateDAO.findById(this.gameId);
         if (gameState == null) {
             System.out.println("GameState not found for gameId: " + this.gameId);
@@ -114,15 +114,27 @@ public class GameAction implements DataTransferObject {
                 break;
             case "USE":
                 //If the player has the right card to use
-                if(playerState.useCard()) {
-
+                int card = playerState.useCard();
+                if(card != 0) {
+                    //Then the gameState updates to reflect that
+                    switch (card) {
+                        case 1:
+                            playerState.setKnightUsed(playerState.getKnightUsed() + 1);
+                            //TODO -- ROBBER MECHANICS
+                            break;
+                        case 2:
+                            break;
+                        default:
+                            System.err.println("Invalid card: " + card);
+                            break;
+                    }
                 }
                 break;
             case "END":
                 gameState.incrementTurn();
                 break;
             default:
-                System.out.println("Invalid action: " + action);
+                System.err.println("Invalid action: " + action);
                 break;
         }
 
