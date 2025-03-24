@@ -165,10 +165,9 @@ public class CatanApplication {
 		try (Connection connection = dcm.getConnection()) {
 			System.out.println("DEBUG - Creating new game state");
 			GameState gameState = new GameState();
-			// Initialize with default values from SQL schema
-			gameState.setTurnNumber(0); // Start with turn 0
-			gameState.setBoardState(null); // Will be set to {} in DAO
-			gameState.setRobberLocation(null); // Will be set to {"hex": "desert"} in DAO
+			gameState.setTurnNumber(0); // start with turn 0
+			gameState.setBoardState(null); // will be set to {} in DAO
+			gameState.setRobberLocation(null); // will be set to {"hex": "desert"} in DAO
 			gameState.setGameOver(false);
 			gameState.setBankBrick(19);
 			gameState.setBankOre(19);
@@ -265,6 +264,107 @@ public class CatanApplication {
 		try (Connection connection = dcm.getConnection()) {
 			GameStateDAO dao = new GameStateDAO(connection);
 			boolean deleted = dao.delete(gameId);
+			return ResponseEntity.ok(Map.of("deleted", deleted));
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body(Map.of("deleted", false));
+		}
+	}
+
+	@PostMapping("/api/games/{gameId}/players/{accountId}/hand")
+	public ResponseEntity<PlayerState> createPlayerHand(
+			@PathVariable long gameId,
+			@PathVariable long accountId,
+			@RequestBody Map<String, Long> data) {
+		try (Connection connection = dcm.getConnection()) {
+			PlayerStateDAO dao = new PlayerStateDAO(connection);
+			PlayerState playerState = dao.createEmptyHand(accountId, gameId, data.get("turnNumber"));
+			if (playerState != null) {
+				return ResponseEntity.ok(playerState);
+			} else {
+				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+		}
+	}
+
+	@GetMapping("/api/games/{gameId}/players/{accountId}/resources")
+	public ResponseEntity<Map<String, Object>> checkResources(
+			@PathVariable long gameId,
+			@PathVariable long accountId,
+			@RequestParam long turnNumber,
+			@RequestParam String resourceType,
+			@RequestParam long quantity) {
+		try (Connection connection = dcm.getConnection()) {
+			PlayerStateDAO dao = new PlayerStateDAO(connection);
+			boolean hasEnough = dao.hasEnoughResources(accountId, gameId, turnNumber, resourceType, quantity);
+			Map<String, Object> response = new HashMap<>();
+			response.put("hasEnough", hasEnough);
+			response.put("resourceType", resourceType);
+			response.put("quantityRequested", quantity);
+			return ResponseEntity.ok(response);
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+		}
+	}
+
+	@PostMapping("/api/games/{gameId}/players/{accountId}/gain")
+	public ResponseEntity<PlayerState> gainResources(
+			@PathVariable long gameId,
+			@PathVariable long accountId,
+			@RequestBody Map<String, Object> data) {
+		try (Connection connection = dcm.getConnection()) {
+			PlayerStateDAO dao = new PlayerStateDAO(connection);
+			PlayerState updated = dao.updateOnBoardGain(
+				accountId,
+				gameId,
+				Long.parseLong(data.get("turnNumber").toString()),
+				data.get("resourceType").toString(),
+				Integer.parseInt(data.get("numSettlements").toString()),
+				Integer.parseInt(data.get("numCities").toString())
+			);
+			if (updated != null) {
+				return ResponseEntity.ok(updated);
+			} else {
+				return ResponseEntity.notFound().build();
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+		}
+	}
+
+	@PostMapping("/api/games/{gameId}/players/{accountId}/robber")
+	public ResponseEntity<PlayerState> robberLoss(
+			@PathVariable long gameId,
+			@PathVariable long accountId,
+			@RequestBody Map<String, Long> data) {
+		try (Connection connection = dcm.getConnection()) {
+			PlayerStateDAO dao = new PlayerStateDAO(connection);
+			PlayerState updated = dao.updateOnRobberLoss(accountId, gameId, data.get("turnNumber"));
+			if (updated != null) {
+				return ResponseEntity.ok(updated);
+			} else {
+				return ResponseEntity.notFound().build();
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+		}
+	}
+
+	@DeleteMapping("/api/games/{gameId}/players/{accountId}/hand")
+	public ResponseEntity<Map<String, Boolean>> deletePlayerHand(
+			@PathVariable long gameId,
+			@PathVariable long accountId,
+			@RequestParam long turnNumber) {
+		try (Connection connection = dcm.getConnection()) {
+			PlayerStateDAO dao = new PlayerStateDAO(connection);
+			boolean deleted = dao.deletePlayerHand(accountId, gameId, turnNumber);
 			return ResponseEntity.ok(Map.of("deleted", deleted));
 		} catch (SQLException e) {
 			e.printStackTrace();
