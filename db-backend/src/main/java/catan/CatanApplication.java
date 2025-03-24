@@ -8,18 +8,18 @@ import org.springframework.http.ResponseEntity;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Map;
+import java.util.HashMap;
+import org.springframework.http.HttpStatus;
 
 @SpringBootApplication
 @RestController
-@RequestMapping("/api/account")
 public class CatanApplication {
 
 	private final DatabaseConnectionManager dcm = new DatabaseConnectionManager("db",
 			"catan", "postgres", "password");
 
-	@PostMapping
+	@PostMapping("/api/account")
 	public ResponseEntity<?> createAccount(@RequestBody Map<String, String> accountData) {
-
 		if (accountData.get("username") == null || accountData.get("username").trim().isEmpty()) {
 			return ResponseEntity.badRequest().body("Username is required");
 		}
@@ -33,7 +33,6 @@ public class CatanApplication {
 			
 			account.setUsername(accountData.get("username").trim());
 			account.setPassword(accountData.get("password"));
-
 
 			// initialize stats to 0 upon account creation
 			account.setTotalGames(0);
@@ -50,67 +49,96 @@ public class CatanApplication {
 		}
 	}
 
-	@GetMapping("/{id}")
-	public Account getAccountById(@PathVariable("id") long id) {
+	@GetMapping("/api/account/{id}")
+	public ResponseEntity<Account> getAccountById(@PathVariable("id") long id) {
 		try (Connection connection = dcm.getConnection()) {
 			AccountDAO accountDAO = new AccountDAO(connection);
-			return accountDAO.findById(id);
+			Account account = accountDAO.findById(id);
+			if (account != null) {
+				return ResponseEntity.ok(account);
+			} else {
+				return ResponseEntity.notFound().build();
+			}
 		} catch(SQLException e) {
 			e.printStackTrace();
-			throw new RuntimeException("Failed to get account", e);
+			return ResponseEntity.internalServerError().build();
 		}
 	}
 
-	@PatchMapping("/{id}/username")
-	public Account updateUsername(@PathVariable("id") long id, @RequestBody Map<String, String> data) {
+	@PatchMapping("/api/account/{id}/username")
+	public ResponseEntity<Account> updateUsername(@PathVariable("id") long id, @RequestBody Map<String, String> data) {
 		try (Connection connection = dcm.getConnection()) {
 			AccountDAO accountDAO = new AccountDAO(connection);
-			return accountDAO.updateUsername(id, data.get("username"));
+			Account account = accountDAO.updateUsername(id, data.get("username"));
+			if (account != null) {
+				return ResponseEntity.ok(account);
+			} else {
+				return ResponseEntity.notFound().build();
+			}
 		} catch(SQLException e) {
 			e.printStackTrace();
-			throw new RuntimeException("Failed to update username", e);
+			return ResponseEntity.internalServerError().build();
 		}
 	}
 
-	@PatchMapping("/{id}/password")
-	public Account updatePassword(@PathVariable("id") long id, @RequestBody Map<String, String> data) {
+	@PatchMapping("/api/account/{id}/password")
+	public ResponseEntity<Account> updatePassword(@PathVariable("id") long id, @RequestBody Map<String, String> data) {
 		try (Connection connection = dcm.getConnection()) {
 			AccountDAO accountDAO = new AccountDAO(connection);
-			return accountDAO.updatePassword(id, data.get("password"));
+			Account account = accountDAO.updatePassword(id, data.get("password"));
+			if (account != null) {
+				return ResponseEntity.ok(account);
+			} else {
+				return ResponseEntity.notFound().build();
+			}
 		} catch(SQLException e) {
 			e.printStackTrace();
-			throw new RuntimeException("Failed to update password", e);
+			return ResponseEntity.internalServerError().build();
 		}
 	}
 
-	@PatchMapping("/{id}/elo")
-	public Account updateElo(@PathVariable("id") long id, @RequestBody Map<String, Long> data) {
+	@PatchMapping("/api/account/{id}/elo")
+	public ResponseEntity<Account> updateElo(@PathVariable("id") long id, @RequestBody Map<String, Long> data) {
 		try (Connection connection = dcm.getConnection()) {
 			AccountDAO accountDAO = new AccountDAO(connection);
-			return accountDAO.updateElo(id, data.get("elo"));
+			Account account = accountDAO.updateElo(id, data.get("elo"));
+			if (account != null) {
+				return ResponseEntity.ok(account);
+			} else {
+				return ResponseEntity.notFound().build();
+			}
 		} catch(SQLException e) {
 			e.printStackTrace();
-			throw new RuntimeException("Failed to update ELO", e);
+			return ResponseEntity.internalServerError().build();
 		}
 	}
 
-	@DeleteMapping("/{id}")
-	public boolean deleteAccount(@PathVariable("id") long id) {
+	@DeleteMapping("/api/account/{id}")
+	public ResponseEntity<Void> deleteAccount(@PathVariable("id") long id) {
 		try (Connection connection = dcm.getConnection()) {
 			AccountDAO accountDAO = new AccountDAO(connection);
-			return accountDAO.delete(id);
+			boolean deleted = accountDAO.delete(id);
+			if (deleted) {
+				return ResponseEntity.ok().build();
+			} else {
+				return ResponseEntity.notFound().build();
+			}
 		} catch(SQLException e) {
 			e.printStackTrace();
-			throw new RuntimeException("Failed to delete account", e);
+			return ResponseEntity.internalServerError().build();
 		}
 	}
 
-	@PostMapping("/{id}/win")
+	@PostMapping("/api/account/{id}/win")
 	public ResponseEntity<?> recordWin(@PathVariable("id") long id) {
 		try (Connection connection = dcm.getConnection()) {
 			AccountDAO accountDAO = new AccountDAO(connection);
 			Account updatedAccount = accountDAO.incrementWins(id);
-			return ResponseEntity.ok(updatedAccount);
+			if (updatedAccount != null) {
+				return ResponseEntity.ok(updatedAccount);
+			} else {
+				return ResponseEntity.notFound().build();
+			}
 		} catch(SQLException e) {
 			e.printStackTrace();
 			return ResponseEntity.internalServerError()
@@ -118,16 +146,93 @@ public class CatanApplication {
 		}
 	}
 
-	@PostMapping("/{id}/loss")
+	@PostMapping("/api/account/{id}/loss")
 	public ResponseEntity<?> recordLoss(@PathVariable("id") long id) {
 		try (Connection connection = dcm.getConnection()) {
 			AccountDAO accountDAO = new AccountDAO(connection);
 			Account updatedAccount = accountDAO.incrementLosses(id);
-			return ResponseEntity.ok(updatedAccount);
+			if (updatedAccount != null) {
+				return ResponseEntity.ok(updatedAccount);
+			} else {
+				return ResponseEntity.notFound().build();
+			}
 		} catch(SQLException e) {
 			e.printStackTrace();
 			return ResponseEntity.internalServerError()
 				.body("Failed to record loss: " + e.getMessage());
+		}
+	}
+
+	@PostMapping("/api/games")
+	public ResponseEntity<GameState> createGame() {
+		try (Connection connection = dcm.getConnection()) {
+			GameState gameState = new GameState();
+			GameStateDAO dao = new GameStateDAO(connection);
+			GameState created = dao.create(gameState);
+			return ResponseEntity.ok(created);
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+		}
+	}
+
+	@GetMapping("/api/games/{gameId}/longest-road")
+	public ResponseEntity<Map<String, Object>> getLongestRoadHolder(@PathVariable long gameId) {
+		try (Connection connection = dcm.getConnection()) {
+			GameStateDAO dao = new GameStateDAO(connection);
+			GameState gameState = dao.findById(gameId);
+			if (gameState == null) {
+				return ResponseEntity.notFound().build();
+			}
+			
+			Long accountId = dao.findLongestRoadHolder(gameId, gameState.getTurnNumber());
+			Map<String, Object> response = new HashMap<>();
+			response.put("gameId", gameId);
+			response.put("turnNumber", gameState.getTurnNumber());
+			response.put("longestRoadHolder", accountId);
+			
+			return ResponseEntity.ok(response);
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+		}
+	}
+
+	@GetMapping("/api/games/{gameId}/largest-army")
+	public ResponseEntity<Map<String, Object>> getLargestArmyHolder(@PathVariable long gameId) {
+		try (Connection connection = dcm.getConnection()) {
+			GameStateDAO dao = new GameStateDAO(connection);
+			GameState gameState = dao.findById(gameId);
+			if (gameState == null) {
+				return ResponseEntity.notFound().build();
+			}
+			
+			Long accountId = dao.findLargestArmyHolder(gameId, gameState.getTurnNumber());
+			Map<String, Object> response = new HashMap<>();
+			response.put("gameId", gameId);
+			response.put("turnNumber", gameState.getTurnNumber());
+			response.put("largestArmyHolder", accountId);
+			
+			return ResponseEntity.ok(response);
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+		}
+	}
+
+	@DeleteMapping("/api/games/{gameId}")
+	public ResponseEntity<Void> deleteGame(@PathVariable long gameId) {
+		try (Connection connection = dcm.getConnection()) {
+			GameStateDAO dao = new GameStateDAO(connection);
+			boolean deleted = dao.delete(gameId);
+			if (deleted) {
+				return ResponseEntity.ok().build();
+			} else {
+				return ResponseEntity.notFound().build();
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
 		}
 	}
 
