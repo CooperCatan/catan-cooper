@@ -45,12 +45,12 @@ public class GameAction implements DataTransferObject {
         //The following code to find the GameState and PlayerState has been supplied by Github Copilot
         GameState gameState = gameStateDAO.findById(this.gameId);
         if (gameState == null) {
-            System.out.println("GameState not found for gameId: " + this.gameId);
+            System.err.println("GameState not found for gameId: " + this.gameId);
             return;
         }
         PlayerState playerState = playerStateDAO.findById(this.accountId);
         if (playerState == null) {
-            System.out.println("PlayerState not found for accountId: " + this.accountId);
+            System.err.println("PlayerState not found for accountId: " + this.accountId);
             return;
         }
 
@@ -132,6 +132,10 @@ public class GameAction implements DataTransferObject {
                 break;
             case "END":
                 gameState.incrementTurn();
+                gameStateDAO.update(gameState);
+                //We have to return here because the increment turn increases playerState values.
+                //If we update playerState here one of the players wont get any resources
+                return;
                 break;
             default:
                 System.err.println("Invalid action: " + action);

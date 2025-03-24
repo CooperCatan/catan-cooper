@@ -13,11 +13,11 @@ class Vertex {
         this.id = id;
         this.adjacentEdges = new ArrayList<>();
         this.buildingType = 0; // Default to no building
-        this.playerId = -1; // Default to no owner
+        this.playerId = 0; // Default to no owner
     }
 
     public void addEdge(Vertex vertex) {
-        Edge newEdge = new Edge(this, vertex, false, -1);
+        Edge newEdge = new Edge(this, vertex, false, 0);
         if(this.adjacentEdges.contains(newEdge) || vertex.adjacentEdges.contains(newEdge)) {
             //Do nothing
         } else {
@@ -48,7 +48,8 @@ class Vertex {
         if (this.buildingType == 0 && newBuilding == 1) {
             this.buildingType = newBuilding;
             return true;
-        } else if(this.buildingType == 1 && newBuilding == 2) {
+        } else if(this.buildingType == 1 && newBuilding == 2 && playerId == this.playerId) {
+            //Cities have the extra condition of needing the previous building to belong to the same person
             this.buildingType = newBuilding;
             return true;
         } else {

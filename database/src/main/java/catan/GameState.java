@@ -25,6 +25,8 @@ public class GameState implements DataTransferObject {
     private long bankVictoryPoint;
     private long bankKnight;
 
+    public GameState() {}
+
     public void newGame() {
         this.vertices = new Vertex[54];
         //Make all the vertices on the board
@@ -203,5 +205,40 @@ public class GameState implements DataTransferObject {
         }
 
         return selectedCard;
+    }
+
+    public void incrementTurn() {
+        this.turnNumber++;
+        this.rollDice();
+        return;
+    }
+
+    public int rollDice() {
+        int roll = (int) (Math.random() * 6) + 1 + (int) (Math.random() * 6) + 1;
+        //Go through each hex and find what to give
+        for (Hex hex : this.hexes) {
+            //Only give resources to hexes matching the roll value
+            if(hex.getRollValue() == roll) {
+                for (Vertex vex : hex.getVertices()) {
+                    //Check if a player has a building here (the default 0 is false)
+                    if(vex.getPlayerId()) {
+                        //If there is a building make a playerState object for the relevent player and update it
+                        PlayerState playerState = playerStateDAO.findById(vex.getPlayerId());
+                        if (playerState == null) {
+                            System.err.println("PlayerState not found for accountId: " + this.accountId);
+                            return;
+                        }
+                        switch(hex.getResource()) {
+                            case "brick" -> playerState.setBrick(playerState.getBrick() + 1);
+                            case "wood" -> playerState.setWood(playerState.getWood() + 1);
+                            case "wheat" -> playerState.setWheat(playerState.getWheat() + 1);
+                            case "ore" -> playerState.setOre(playerState.getOre() + 1);
+                            case "wool" -> playerState.setWool(playerState.getWool() + 1);
+                        }
+                        playerStateDAO.update(playerState);
+                    }
+                }
+            }
+        }
     }
 } 
