@@ -3,26 +3,38 @@ package catan;
 import catan.util.DataAccessObject;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 
 public class GameStateDAO extends DataAccessObject<GameState> {
-    private static final String GET_ONE = "SELECT * FROM game_state WHERE game_id=? AND turn_number=?";
-    private static final String GET_LATEST = "SELECT * FROM game_state WHERE game_id=? ORDER BY turn_number DESC LIMIT 1";
-    private static final String INSERT = "INSERT INTO game_state (game_id, turn_number, board_state, winner_id, robber_location, is_game_over, " +
-            "bank_brick, bank_ore, bank_sheep, bank_wheat, bank_wood, bank_year_of_plenty, bank_monopoly, " +
-            "bank_road_building, bank_victory_point, bank_knight) " +
-            "VALUES (?, ?, ?::jsonb, ?, ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    private static final String DELETE = "DELETE FROM game_state WHERE game_id=?";
-    private static final String GET_LONGEST_ROAD = 
-            "SELECT account_id FROM player_state " +
-            "WHERE game_id=? AND turn_number=? AND longest_road=true";
-    private static final String GET_LARGEST_ARMY = 
-            "SELECT account_id FROM player_state " +
-            "WHERE game_id=? AND turn_number=? AND largest_army=true";
+
+    private static final String GET_ONE =
+        "SELECT * FROM game_state WHERE game_id=? AND turn_number=?";
+    private static final String GET_LATEST =
+        "SELECT * FROM game_state WHERE game_id=? ORDER BY turn_number DESC LIMIT 1";
+    private static final String INSERT =
+        "INSERT INTO game_state (game_id, turn_number, board_state, winner_id, robber_location, is_game_over, " +
+        "bank_brick, bank_ore, bank_sheep, bank_wheat, bank_wood, bank_year_of_plenty, bank_monopoly, " +
+        "bank_road_building, bank_victory_point, bank_knight) " +
+        "VALUES (nextval('game_id_seq'), ?, ?::jsonb, ?, ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+        "RETURNING game_id";
+    private static final String DELETE_GAME_ACTIONS = 
+        "DELETE FROM game_action WHERE game_id=?";
+    private static final String DELETE_TRADES = 
+        "DELETE FROM trade WHERE game_id=?";
+    private static final String DELETE_PLAYER_STATES = 
+        "DELETE FROM player_state WHERE game_id=?";
+    private static final String DELETE_GAME_STATE = 
+        "DELETE FROM game_state WHERE game_id=?";
+    private static final String GET_LONGEST_ROAD =
+        "SELECT account_id FROM player_state " +
+        "WHERE game_id=? AND turn_number=? AND longest_road=true";
+    private static final String GET_LARGEST_ARMY =
+        "SELECT account_id FROM player_state " +
+        "WHERE game_id=? AND turn_number=? AND largest_army=true";
 
     public GameStateDAO(Connection connection) {
         super(connection);
@@ -32,9 +44,10 @@ public class GameStateDAO extends DataAccessObject<GameState> {
     public GameState findById(long gameId) {
         try (PreparedStatement statement = this.connection.prepareStatement(GET_LATEST)) {
             statement.setLong(1, gameId);
-            ResultSet rs = statement.executeQuery();
-            if (rs.next()) {
-                return extractFromResultSet(rs);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    return extractFromResultSet(rs);
+                }
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -47,9 +60,10 @@ public class GameStateDAO extends DataAccessObject<GameState> {
         try (PreparedStatement statement = this.connection.prepareStatement(GET_ONE)) {
             statement.setLong(1, gameId);
             statement.setLong(2, turnNumber);
-            ResultSet rs = statement.executeQuery();
-            if (rs.next()) {
-                return extractFromResultSet(rs);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    return extractFromResultSet(rs);
+                }
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -60,42 +74,86 @@ public class GameStateDAO extends DataAccessObject<GameState> {
 
     @Override
     public GameState create(GameState dto) {
-        try (PreparedStatement statement = this.connection.prepareStatement(INSERT)) {
-            statement.setLong(1, dto.getGameId());
-            statement.setLong(2, dto.getTurnNumber());
-            statement.setString(3, dto.getBoardState() != null ? dto.getBoardState().toString() : "{}");
-            if (dto.getWinnerId() != null) {
-                statement.setLong(4, dto.getWinnerId());
-            } else {
-                statement.setNull(4, java.sql.Types.BIGINT);
-            }
-            statement.setString(5, dto.getRobberLocation() != null ? dto.getRobberLocation().toString() : "{\"hex\": \"desert\"}");
-            statement.setBoolean(6, dto.isGameOver());
-            statement.setLong(7, dto.getBankBrick());
-            statement.setLong(8, dto.getBankOre());
-            statement.setLong(9, dto.getBankSheep());
-            statement.setLong(10, dto.getBankWheat());
-            statement.setLong(11, dto.getBankWood());
-            statement.setLong(12, dto.getBankYearOfPlenty());
-            statement.setLong(13, dto.getBankMonopoly());
-            statement.setLong(14, dto.getBankRoadBuilding());
-            statement.setLong(15, dto.getBankVictoryPoint());
-            statement.setLong(16, dto.getBankKnight());
+        try (PreparedStatement statement = this.connection.prepareStatement(INSERT, Statement.RETURN_GENERATED_KEYS)) {
+            System.out.println("DEBUG - Preparing to insert game state with turn number: " + dto.getTurnNumber());
             
-            statement.execute();
-            return findByGameIdAndTurn(dto.getGameId(), dto.getTurnNumber());
+
+            statement.setLong(1, dto.getTurnNumber());
+            statement.setString(2, dto.getBoardState() != null ? dto.getBoardState().toString() : "{}");
+            if (dto.getWinnerId() != null) {
+                statement.setLong(3, dto.getWinnerId());
+            } else {
+                statement.setNull(3, java.sql.Types.BIGINT);
+            }
+            statement.setString(4, dto.getRobberLocation() != null ? dto.getRobberLocation().toString() : "{\"hex\": \"desert\"}");
+            statement.setBoolean(5, dto.isGameOver());
+            statement.setLong(6, dto.getBankBrick());
+            statement.setLong(7, dto.getBankOre());
+            statement.setLong(8, dto.getBankSheep());
+            statement.setLong(9, dto.getBankWheat());
+            statement.setLong(10, dto.getBankWood());
+            statement.setLong(11, dto.getBankYearOfPlenty());
+            statement.setLong(12, dto.getBankMonopoly());
+            statement.setLong(13, dto.getBankRoadBuilding());
+            statement.setLong(14, dto.getBankVictoryPoint());
+            statement.setLong(15, dto.getBankKnight());
+            
+            System.out.println("DEBUG - Executing SQL: " + INSERT);
+            
+            int affectedRows = statement.executeUpdate();
+            System.out.println("DEBUG - Affected rows: " + affectedRows);
+            
+            if (affectedRows == 0) {
+                throw new SQLException("Creating game state failed, no rows affected.");
+            }
+
+            try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
+                if (generatedKeys.next()) {
+                    long gameId = generatedKeys.getLong(1);
+                    System.out.println("DEBUG - Generated game_id: " + gameId);
+                    return findByGameIdAndTurn(gameId, dto.getTurnNumber());
+                } else {
+                    throw new SQLException("Creating game state failed, no ID obtained.");
+                }
+            }
         } catch (SQLException e) {
+            System.err.println("ERROR - SQL State: " + e.getSQLState());
+            System.err.println("ERROR - Error Code: " + e.getErrorCode());
+            System.err.println("ERROR - Message: " + e.getMessage());
             e.printStackTrace();
-            throw new RuntimeException(e);
+            throw new RuntimeException("Failed to create game state: " + e.getMessage(), e);
         }
     }
 
     @Override
     public boolean delete(long gameId) {
-        try (PreparedStatement statement = this.connection.prepareStatement(DELETE)) {
-            statement.setLong(1, gameId);
-            return statement.executeUpdate() > 0;
+        try {
+            // We need to delete in the correct order due to foreign key constraints
+            // First delete game actions
+            try (PreparedStatement statement = this.connection.prepareStatement(DELETE_GAME_ACTIONS)) {
+                statement.setLong(1, gameId);
+                statement.executeUpdate();
+            }
+
+            // Then delete trades
+            try (PreparedStatement statement = this.connection.prepareStatement(DELETE_TRADES)) {
+                statement.setLong(1, gameId);
+                statement.executeUpdate();
+            }
+
+            // Then delete player states
+            try (PreparedStatement statement = this.connection.prepareStatement(DELETE_PLAYER_STATES)) {
+                statement.setLong(1, gameId);
+                statement.executeUpdate();
+            }
+
+            // Finally delete the game state
+            try (PreparedStatement statement = this.connection.prepareStatement(DELETE_GAME_STATE)) {
+                statement.setLong(1, gameId);
+                return statement.executeUpdate() > 0;
+            }
         } catch (SQLException e) {
+            System.err.println("Error deleting game with ID " + gameId + ": " + e.getMessage());
             e.printStackTrace();
             throw new RuntimeException(e);
         }
@@ -105,9 +163,10 @@ public class GameStateDAO extends DataAccessObject<GameState> {
         try (PreparedStatement statement = this.connection.prepareStatement(GET_LONGEST_ROAD)) {
             statement.setLong(1, gameId);
             statement.setLong(2, turnNumber);
-            ResultSet rs = statement.executeQuery();
-            if (rs.next()) {
-                return rs.getLong("account_id");
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getLong("account_id");
+                }
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -120,9 +179,10 @@ public class GameStateDAO extends DataAccessObject<GameState> {
         try (PreparedStatement statement = this.connection.prepareStatement(GET_LARGEST_ARMY)) {
             statement.setLong(1, gameId);
             statement.setLong(2, turnNumber);
-            ResultSet rs = statement.executeQuery();
-            if (rs.next()) {
-                return rs.getLong("account_id");
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getLong("account_id");
+                }
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -165,4 +225,4 @@ public class GameStateDAO extends DataAccessObject<GameState> {
         gameState.setBankKnight(rs.getLong("bank_knight"));
         return gameState;
     }
-} 
+}
