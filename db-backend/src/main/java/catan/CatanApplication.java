@@ -114,18 +114,15 @@ public class CatanApplication {
 	}
 
 	@DeleteMapping("/api/account/{id}")
-	public ResponseEntity<Void> deleteAccount(@PathVariable("id") long id) {
+	public ResponseEntity<Map<String, Boolean>> deleteAccount(@PathVariable("id") long id) {
 		try (Connection connection = dcm.getConnection()) {
 			AccountDAO accountDAO = new AccountDAO(connection);
 			boolean deleted = accountDAO.delete(id);
-			if (deleted) {
-				return ResponseEntity.ok().build();
-			} else {
-				return ResponseEntity.notFound().build();
-			}
+			return ResponseEntity.ok(Map.of("deleted", deleted));
 		} catch(SQLException e) {
 			e.printStackTrace();
-			return ResponseEntity.internalServerError().build();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body(Map.of("deleted", false));
 		}
 	}
 
@@ -164,15 +161,58 @@ public class CatanApplication {
 	}
 
 	@PostMapping("/api/games")
-	public ResponseEntity<GameState> createGame() {
+	public ResponseEntity<Object> createGame() {
 		try (Connection connection = dcm.getConnection()) {
+			System.out.println("DEBUG - Creating new game state");
 			GameState gameState = new GameState();
+			// Initialize with default values from SQL schema
+			gameState.setTurnNumber(0); // Start with turn 0
+			gameState.setBoardState(null); // Will be set to {} in DAO
+			gameState.setRobberLocation(null); // Will be set to {"hex": "desert"} in DAO
+			gameState.setGameOver(false);
+			gameState.setBankBrick(19);
+			gameState.setBankOre(19);
+			gameState.setBankSheep(19);
+			gameState.setBankWheat(19);
+			gameState.setBankWood(19);
+			gameState.setBankYearOfPlenty(2);
+			gameState.setBankMonopoly(2);
+			gameState.setBankRoadBuilding(2);
+			gameState.setBankVictoryPoint(5);
+			gameState.setBankKnight(14);
+
+			System.out.println("DEBUG - Game state initialized with default values");
 			GameStateDAO dao = new GameStateDAO(connection);
-			GameState created = dao.create(gameState);
-			return ResponseEntity.ok(created);
+			
+			try {
+				GameState created = dao.create(gameState);
+				if (created == null) {
+					System.err.println("ERROR - Failed to create game state: result was null");
+					return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+						.body(Map.of(
+							"error", "Failed to create game state",
+							"message", "Database operation completed but returned null"
+						));
+				}
+				System.out.println("DEBUG - Game created successfully with ID: " + created.getGameId());
+				return ResponseEntity.ok(created);
+			} catch (RuntimeException e) {
+				System.err.println("ERROR - Failed to create game state: " + e.getMessage());
+				e.printStackTrace();
+				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+					.body(Map.of(
+						"error", "Failed to create game state",
+						"message", e.getMessage()
+					));
+			}
 		} catch (SQLException e) {
+			System.err.println("ERROR - Database connection error: " + e.getMessage());
 			e.printStackTrace();
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body(Map.of(
+					"error", "Database connection error",
+					"message", e.getMessage()
+				));
 		}
 	}
 
@@ -221,18 +261,15 @@ public class CatanApplication {
 	}
 
 	@DeleteMapping("/api/games/{gameId}")
-	public ResponseEntity<Void> deleteGame(@PathVariable long gameId) {
+	public ResponseEntity<Map<String, Boolean>> deleteGame(@PathVariable long gameId) {
 		try (Connection connection = dcm.getConnection()) {
 			GameStateDAO dao = new GameStateDAO(connection);
 			boolean deleted = dao.delete(gameId);
-			if (deleted) {
-				return ResponseEntity.ok().build();
-			} else {
-				return ResponseEntity.notFound().build();
-			}
+			return ResponseEntity.ok(Map.of("deleted", deleted));
 		} catch (SQLException e) {
 			e.printStackTrace();
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body(Map.of("deleted", false));
 		}
 	}
 

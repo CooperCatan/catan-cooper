@@ -32,9 +32,9 @@ CREATE TABLE account (
 CREATE TABLE game_state (
     game_id bigint DEFAULT nextval('game_id_seq'),
     turn_number bigint DEFAULT nextval('turn_number_seq'),
-    board_state jsonb DEFAULT '{}', 
+    board_state jsonb DEFAULT '{}',
     winner_id bigint,
-    robber_location jsonb DEFAULT '{"hex": "desert"}',
+    robber_location jsonb DEFAULT '{"hex":"desert"}',
     is_game_over boolean DEFAULT FALSE,
     bank_brick bigint DEFAULT 19, --hardcoded values here and below from catan rulebook
     bank_ore bigint DEFAULT 19,
@@ -46,9 +46,9 @@ CREATE TABLE game_state (
     bank_road_building bigint DEFAULT 2,
     bank_victory_point bigint DEFAULT 5,
     bank_knight bigint DEFAULT 14,
-    PRIMARY KEY (game_id, turn_number),
-    FOREIGN KEY (winner_id) REFERENCES account(account_id)
+    PRIMARY KEY (game_id, turn_number)
 );
+
 
 
 CREATE TABLE player_state (
