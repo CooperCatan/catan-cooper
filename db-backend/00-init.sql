@@ -1,4 +1,3 @@
--- for repeated use, we can just run this file in the beginning
 
 DROP TABLE IF EXISTS game_action;
 DROP TABLE IF EXISTS trade;
@@ -36,7 +35,7 @@ CREATE TABLE game_state (
     winner_id bigint,
     robber_location jsonb DEFAULT '{"hex":"desert"}',
     is_game_over boolean DEFAULT FALSE,
-    bank_brick bigint DEFAULT 19, --hardcoded values here and below from catan rulebook
+    bank_brick bigint DEFAULT 19, 
     bank_ore bigint DEFAULT 19,
     bank_sheep bigint DEFAULT 19,
     bank_wheat bigint DEFAULT 19,
