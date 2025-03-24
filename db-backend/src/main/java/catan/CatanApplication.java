@@ -273,21 +273,72 @@ public class CatanApplication {
 	}
 
 	@PostMapping("/api/games/{gameId}/players/{accountId}/hand")
-	public ResponseEntity<PlayerState> createPlayerHand(
+	public ResponseEntity<Object> createPlayerHand(
 			@PathVariable long gameId,
 			@PathVariable long accountId,
 			@RequestBody Map<String, Long> data) {
+		System.out.println("DEBUG - Received request to create player hand for gameId=" + gameId + ", accountId=" + accountId);
+		System.out.println("DEBUG - Request body: " + data);
+		
 		try (Connection connection = dcm.getConnection()) {
+			GameStateDAO gameStateDAO = new GameStateDAO(connection);
+			System.out.println("DEBUG - Checking if game exists with ID: " + gameId);
+			GameState gameState = gameStateDAO.findById(gameId);
+			if (gameState == null) {
+				System.err.println("ERROR - Game not found with ID: " + gameId);
+				return ResponseEntity.status(HttpStatus.NOT_FOUND)
+					.body(Map.of("error", "Game not found", "gameId", gameId));
+			}
+			System.out.println("DEBUG - Game found with ID: " + gameId + ", current turn: " + gameState.getTurnNumber());
+
+			AccountDAO accountDAO = new AccountDAO(connection);
+			System.out.println("DEBUG - Checking if account exists with ID: " + accountId);
+			Account account = accountDAO.findById(accountId);
+			if (account == null) {
+				System.err.println("ERROR - Account not found with ID: " + accountId);
+				return ResponseEntity.status(HttpStatus.NOT_FOUND)
+					.body(Map.of("error", "Account not found", "accountId", accountId));
+			}
+			System.out.println("DEBUG - Account found with ID: " + accountId);
+
 			PlayerStateDAO dao = new PlayerStateDAO(connection);
-			PlayerState playerState = dao.createEmptyHand(accountId, gameId, data.get("turnNumber"));
-			if (playerState != null) {
-				return ResponseEntity.ok(playerState);
-			} else {
-				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+			
+			System.out.println("DEBUG - Checking if player state already exists");
+			PlayerState existingState = dao.findPlayerState(accountId, gameId, gameState.getTurnNumber());
+			if (existingState != null) {
+				System.err.println("ERROR - Player state already exists for this combination");
+				return ResponseEntity.status(HttpStatus.CONFLICT)
+					.body(Map.of("error", "Player state already exists for this game, account, and turn"));
+			}
+			System.out.println("DEBUG - No existing player state found, proceeding with creation");
+
+			try {
+				PlayerState playerState = dao.createEmptyHand(accountId, gameId, gameState.getTurnNumber());
+				if (playerState != null) {
+					System.out.println("DEBUG - Successfully created player state");
+					return ResponseEntity.ok(playerState);
+				} else {
+					System.err.println("ERROR - Failed to create player state (null returned)");
+					return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+						.body(Map.of("error", "Failed to create player state"));
+				}
+			} catch (RuntimeException e) {
+				System.err.println("ERROR - Exception while creating player state: " + e.getMessage());
+				e.printStackTrace();
+				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+					.body(Map.of(
+						"error", "Failed to create player state",
+						"message", e.getMessage()
+					));
 			}
 		} catch (SQLException e) {
+			System.err.println("ERROR - Database connection error: " + e.getMessage());
 			e.printStackTrace();
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body(Map.of(
+					"error", "Database error",
+					"message", e.getMessage()
+				));
 		}
 	}
 
@@ -313,28 +364,84 @@ public class CatanApplication {
 	}
 
 	@PostMapping("/api/games/{gameId}/players/{accountId}/gain")
-	public ResponseEntity<PlayerState> gainResources(
+	public ResponseEntity<Object> gainResources(
 			@PathVariable long gameId,
 			@PathVariable long accountId,
 			@RequestBody Map<String, Object> data) {
+		System.out.println("DEBUG - Received resource gain request for gameId=" + gameId + ", accountId=" + accountId);
+		System.out.println("DEBUG - Request body: " + data);
+
 		try (Connection connection = dcm.getConnection()) {
+			// First verify the game exists and get its current turn
+			GameStateDAO gameStateDAO = new GameStateDAO(connection);
+			System.out.println("DEBUG - Checking if game exists with ID: " + gameId);
+			GameState gameState = gameStateDAO.findById(gameId);
+			if (gameState == null) {
+				System.err.println("ERROR - Game not found with ID: " + gameId);
+				return ResponseEntity.status(HttpStatus.NOT_FOUND)
+					.body(Map.of("error", "Game not found", "gameId", gameId));
+			}
+			System.out.println("DEBUG - Game found with ID: " + gameId + ", current turn: " + gameState.getTurnNumber());
+
+			// Verify all required parameters are present
+			if (!data.containsKey("resourceType") || 
+				!data.containsKey("numSettlements") || !data.containsKey("numCities")) {
+				System.err.println("ERROR - Missing required parameters in request body");
+				return ResponseEntity.badRequest()
+					.body(Map.of("error", "Missing required parameters. Need: resourceType, numSettlements, numCities"));
+			}
+
 			PlayerStateDAO dao = new PlayerStateDAO(connection);
-			PlayerState updated = dao.updateOnBoardGain(
-				accountId,
-				gameId,
-				Long.parseLong(data.get("turnNumber").toString()),
-				data.get("resourceType").toString(),
-				Integer.parseInt(data.get("numSettlements").toString()),
-				Integer.parseInt(data.get("numCities").toString())
-			);
-			if (updated != null) {
-				return ResponseEntity.ok(updated);
-			} else {
-				return ResponseEntity.notFound().build();
+			try {
+				System.out.println("DEBUG - Attempting to update resources with parameters:");
+				System.out.println("DEBUG - Using current turn number: " + gameState.getTurnNumber());
+				System.out.println("DEBUG - resourceType: " + data.get("resourceType"));
+				System.out.println("DEBUG - numSettlements: " + data.get("numSettlements"));
+				System.out.println("DEBUG - numCities: " + data.get("numCities"));
+
+				PlayerState updated = dao.updateOnBoardGain(
+					accountId,
+					gameId,
+					gameState.getTurnNumber(), // Use the game's current turn number
+					data.get("resourceType").toString(),
+					Integer.parseInt(data.get("numSettlements").toString()),
+					Integer.parseInt(data.get("numCities").toString())
+				);
+
+				if (updated != null) {
+					System.out.println("DEBUG - Successfully updated player resources");
+					return ResponseEntity.ok(updated);
+				} else {
+					System.err.println("ERROR - Player state not found for the given combination");
+					return ResponseEntity.status(HttpStatus.NOT_FOUND)
+						.body(Map.of(
+							"error", "Player state not found. Make sure to create a player hand first using /hand endpoint",
+							"gameId", gameId,
+							"accountId", accountId,
+							"turnNumber", gameState.getTurnNumber()
+						));
+				}
+			} catch (NumberFormatException e) {
+				System.err.println("ERROR - Invalid number format in request parameters: " + e.getMessage());
+				return ResponseEntity.badRequest()
+					.body(Map.of("error", "Invalid number format in parameters"));
+			} catch (RuntimeException e) {
+				System.err.println("ERROR - Exception while updating resources: " + e.getMessage());
+				e.printStackTrace();
+				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+					.body(Map.of(
+						"error", "Failed to update resources",
+						"message", e.getMessage()
+					));
 			}
 		} catch (SQLException e) {
+			System.err.println("ERROR - Database connection error: " + e.getMessage());
 			e.printStackTrace();
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body(Map.of(
+					"error", "Database error",
+					"message", e.getMessage()
+				));
 		}
 	}
 

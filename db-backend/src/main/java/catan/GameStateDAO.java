@@ -77,8 +77,8 @@ public class GameStateDAO extends DataAccessObject<GameState> {
         try (PreparedStatement statement = this.connection.prepareStatement(INSERT, Statement.RETURN_GENERATED_KEYS)) {
             System.out.println("DEBUG - Preparing to insert game state with turn number: " + dto.getTurnNumber());
             
-
-            statement.setLong(1, dto.getTurnNumber());
+            // always start with turn 0 for a new game
+            statement.setLong(1, 0);
             statement.setString(2, dto.getBoardState() != null ? dto.getBoardState().toString() : "{}");
             if (dto.getWinnerId() != null) {
                 statement.setLong(3, dto.getWinnerId());
@@ -111,7 +111,7 @@ public class GameStateDAO extends DataAccessObject<GameState> {
                 if (generatedKeys.next()) {
                     long gameId = generatedKeys.getLong(1);
                     System.out.println("DEBUG - Generated game_id: " + gameId);
-                    return findByGameIdAndTurn(gameId, dto.getTurnNumber());
+                    return findByGameIdAndTurn(gameId, 0);
                 } else {
                     throw new SQLException("Creating game state failed, no ID obtained.");
                 }
@@ -128,26 +128,22 @@ public class GameStateDAO extends DataAccessObject<GameState> {
     @Override
     public boolean delete(long gameId) {
         try {
-            // We need to delete in the correct order due to foreign key constraints
-            // First delete game actions
+
             try (PreparedStatement statement = this.connection.prepareStatement(DELETE_GAME_ACTIONS)) {
                 statement.setLong(1, gameId);
                 statement.executeUpdate();
             }
 
-            // Then delete trades
             try (PreparedStatement statement = this.connection.prepareStatement(DELETE_TRADES)) {
                 statement.setLong(1, gameId);
                 statement.executeUpdate();
             }
 
-            // Then delete player states
             try (PreparedStatement statement = this.connection.prepareStatement(DELETE_PLAYER_STATES)) {
                 statement.setLong(1, gameId);
                 statement.executeUpdate();
             }
 
-            // Finally delete the game state
             try (PreparedStatement statement = this.connection.prepareStatement(DELETE_GAME_STATE)) {
                 statement.setLong(1, gameId);
                 return statement.executeUpdate() > 0;
