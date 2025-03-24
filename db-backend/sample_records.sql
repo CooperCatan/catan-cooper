@@ -1,7 +1,7 @@
 INSERT INTO account (username, password, total_wins, total_losses, total_games, elo)
 VALUES 
 ('Surinderpal', 'sheepnotsyphilis', 5, 3, 8, 1200),
-('Mohamed', 'iloveports123', 3, 4, 7, 1150),
+('Mohammed', 'iloveports123', 3, 4, 7, 1150),
 ('IsaacS', 'bestatcatan', 4, 2, 6, 1250),
 ('IsaacM', 'stonenotore', 2, 5, 7, 1100);
 
