@@ -19,7 +19,7 @@ public class GameStateDAO extends DataAccessObject<GameState> {
             "INSERT INTO game_state (game_id, turn_number, json_hexes, json_vertices, json_edges, winner_id, robber_location, is_game_over, " +
                     "bank_brick, bank_ore, bank_sheep, bank_wheat, bank_wood, bank_year_of_plenty, bank_monopoly, " +
                     "bank_road_building, bank_victory_point, bank_knight) " +
-                    "VALUES (nextval('game_id_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+                    "VALUES (nextval('game_id_seq'), ?, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
                     "RETURNING game_id";
     private static final String DELETE_GAME_ACTIONS =
             "DELETE FROM game_action WHERE game_id=?";
