@@ -16,9 +16,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class TextFrontend {
 
     private static final String API_BASE_URL = "http://localhost:8080/api";
-    private static String authToken = null;
+    private static String firebaseIdToken = null; // Store Firebase ID Token
     private static Long currentGameId = null;
-    private static Long currentAccountId = null;
+    private static Long currentAccountId = null; // Still useful for focusing commands
 
     private static final HttpClient client = HttpClient.newBuilder()
                                                     .version(HttpClient.Version.HTTP_1_1)
@@ -28,9 +28,11 @@ public class TextFrontend {
 
     public static void main(String[] args) {
         System.out.println("=======================================");
-        System.out.println(" Catan Text Interface (Limited Backend)");
+        System.out.println(" Catan Text Interface (Firebase Auth)");
         System.out.println("=======================================");
-        System.out.println("Interact with the existing backend endpoints.");
+        System.out.println("Interact with the backend API.");
+        System.out.println("NOTE: Login must be performed externally to get a Firebase ID Token.");
+        System.out.println("Use 'set_token <token>' to provide the token to this client.");
         System.out.println("Type 'help' for available commands, 'exit' to quit.");
 
         while (true) {
@@ -61,41 +63,44 @@ public class TextFrontend {
             case "help":
                 printHelp();
                 break;
-            case "register":
+            case "set_token":
+                handleSetToken(args);
+                break;
+            case "register": // Backend needs modification to handle this without password
                 handleRegister(args);
                 break;
             case "get_account":
                 handleGetAccount(args);
                 break;
             case "create_game":
-                handleCreateGame();
-                break;
+                 if (checkAuth()) handleCreateGame();
+                 break;
             case "delete_game":
-                handleDeleteGame(args);
-                break;
+                 if (checkAuth()) handleDeleteGame(args);
+                 break;
             case "add_player":
-                handleAddPlayer(args);
-                break;
+                 if (checkAuth()) handleAddPlayer(args);
+                 break;
             case "gain":
-                handleGainResources(args);
-                break;
+                 if (checkAuth()) handleGainResources(args);
+                 break;
             case "robber_loss":
-                handleRobberLoss(args);
-                break;
+                 if (checkAuth()) handleRobberLoss(args);
+                 break;
             case "set_focus":
                 handleSetFocus(args);
                 break;
             case "build":
-                 if (checkGameAndAccountFocus()) handleBuildAction(args);
+                 if (checkAuth() && checkGameFocus()) handleBuildAction(args);
                  break;
             case "buy":
-                 if (checkGameAndAccountFocus()) handleBuyAction(args);
+                 if (checkAuth() && checkGameFocus()) handleBuyAction(args);
                  break;
             case "use":
-                 if (checkGameAndAccountFocus()) handleUseAction(args);
+                 if (checkAuth() && checkGameFocus()) handleUseAction(args);
                  break;
             case "end_turn":
-                 if (checkGameAndAccountFocus()) handleEndTurnAction();
+                 if (checkAuth() && checkGameFocus()) handleEndTurnAction();
                  break;
             default:
                 System.out.println("Unknown command: '" + command + "'. Type 'help' for options.");
@@ -105,16 +110,17 @@ public class TextFrontend {
     private static void printHelp() {
         System.out.println("\nAvailable Commands:");
         System.out.println("  help                            - Show this help message");
-        System.out.println("  register <username> <password>  - Create a new account");
-        System.out.println("  get_account <id>                - Get account details by ID");
-        System.out.println("  create_game                     - Create a new game instance");
-        System.out.println("  delete_game <gameId>            - Delete a game instance");
-        System.out.println("  add_player <gameId> <accountId> - Adds a player to a game (creates empty hand for turn 0)");
-        System.out.println("  gain <gId> <accId> <res> <set> <city> - Gain resources (e.g., gain 1 1 ore 2 0)");
-        System.out.println("  robber_loss <gId> <accId> <turn>  - Apply robber loss (e.g., robber_loss 1 1 0)");
-        System.out.println("  set_focus game <id>             - Set the current game ID context for commands");
-        System.out.println("  set_focus account <id>          - Set the current account ID context for commands");
-        System.out.println("  --- Game Actions (Requires focused game/account ID) ---");
+        System.out.println("  set_token <firebase_id_token>   - Set the Firebase ID token obtained externally");
+        System.out.println("  register <username>             - Create a new account (Backend needs update)");
+        System.out.println("  get_account <id>                - Get account details by ID (Requires token)");
+        System.out.println("  create_game                     - Create a new game instance (Requires token)");
+        System.out.println("  delete_game <gameId>            - Delete a game instance (Requires token)");
+        System.out.println("  add_player <gameId> <accountId> - Adds player to game turn 0 (Requires token)");
+        System.out.println("  gain <gId> <accId> <res> <set> <city> - Gain resources (Requires token)");
+        System.out.println("  robber_loss <gId> <accId> <turn>  - Apply robber loss (Requires token)");
+        System.out.println("  set_focus game <id>             - Set the current game ID context");
+        System.out.println("  set_focus account <id>          - Set the current account ID context");
+        System.out.println("  --- Game Actions (Requires token & focused game ID) ---");
         System.out.println("  build settlement <vertexId>     - Build a settlement");
         System.out.println("  build city <vertexId>           - Build a city");
         System.out.println("  build road <v1Id> <v2Id>        - Build a road");
@@ -123,23 +129,36 @@ public class TextFrontend {
         System.out.println("  end_turn                        - End your current turn");
         System.out.println("  exit                            - Quit the application\n");
         System.out.println("Notes:");
-        System.out.println(" - Assumes backend has a '/api/games/{gameId}/action' endpoint for game actions.");
-        System.out.println(" - Login, Join, Status, Trade commands are unavailable as backend endpoints are missing.");
+        System.out.println(" - Login must happen externally. Use 'set_token' to provide the Firebase ID token.");
+        System.out.println(" - Backend MUST be updated to verify Firebase ID tokens for auth to work.");
+        System.out.println(" - Register command assumes backend is updated to not require a password.");
     }
 
-     private static boolean checkGameAndAccountFocus() {
-         if (currentGameId == null) {
-             System.out.println("[Error] No game focus set. Use 'set_focus game <id>'.");
+     private static boolean checkAuth() {
+         if (firebaseIdToken == null || firebaseIdToken.trim().isEmpty()) {
+             System.out.println("[Error] No Firebase ID token set. Use 'set_token <token>' after logging in externally.");
              return false;
-         }
-         // We simulate having an account focus for now, as login isn't implemented
-         // In a real scenario, authToken would be checked instead of currentAccountId
-         if (currentAccountId == null) {
-              System.out.println("[Error] No account focus set. Use 'set_focus account <id>'.");
-              return false;
          }
          return true;
      }
+
+      private static boolean checkGameFocus() {
+          if (currentGameId == null) {
+              System.out.println("[Error] No game focus set. Use 'set_focus game <id>'.");
+              return false;
+          }
+          return true;
+      }
+
+    private static void handleSetToken(String token) {
+        if (token == null || token.trim().isEmpty()) {
+            System.out.println("Usage: set_token <firebase_id_token>");
+            firebaseIdToken = null;
+        } else {
+            firebaseIdToken = token.trim();
+            System.out.println("Firebase ID token set.");
+        }
+    }
 
     private static void handleSetFocus(String args) {
         String[] parts = args.trim().split("\\s+", 2);
@@ -165,21 +184,19 @@ public class TextFrontend {
     }
 
     private static void handleRegister(String args) throws Exception {
-        String[] creds = args.trim().split("\\s+", 2);
-        if (creds.length < 2) {
-            System.out.println("Usage: register <username> <password>");
+        String username = args.trim();
+        if (username.isEmpty()) {
+            System.out.println("Usage: register <username>");
             return;
         }
-        Map<String, String> payload = Map.of("username", creds[0], "password", creds[1]);
+
+        Map<String, String> payload = Map.of("username", username);
         String jsonBody = objectMapper.writeValueAsString(payload);
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(API_BASE_URL + "/account"))
-                .header("Content-Type", "application/json")
-                .POST(BodyPublishers.ofString(jsonBody))
-                .build();
+        HttpRequest request = buildRequest("POST", "/account", jsonBody);
 
         System.out.println("Sending request to POST " + request.uri());
+        System.out.println("NOTE: Assumes backend /api/account is updated for Firebase (e.g., no password needed, links to Firebase UID from verified token).");
         sendRequestAndPrintResponse(request);
     }
 
@@ -197,20 +214,14 @@ public class TextFrontend {
              }
         }
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(API_BASE_URL + "/account/" + accountId))
-                .GET()
-                .build();
+        HttpRequest request = buildRequest("GET", "/account/" + accountId, null);
 
         System.out.println("Sending request to GET " + request.uri());
         sendRequestAndPrintResponse(request);
     }
 
      private static void handleCreateGame() throws Exception {
-         HttpRequest request = HttpRequest.newBuilder()
-                 .uri(URI.create(API_BASE_URL + "/games"))
-                 .POST(BodyPublishers.noBody())
-                 .build();
+         HttpRequest request = buildRequest("POST", "/games", ""); // Empty body often needed for POST with token
 
          System.out.println("Sending request to POST " + request.uri());
          HttpResponse<String> response = sendRequestAndGetResponse(request);
@@ -243,10 +254,7 @@ public class TextFrontend {
              }
         }
 
-         HttpRequest request = HttpRequest.newBuilder()
-                 .uri(URI.create(API_BASE_URL + "/games/" + gameId))
-                 .DELETE()
-                 .build();
+         HttpRequest request = buildRequest("DELETE", "/games/" + gameId, null);
 
          System.out.println("Sending request to DELETE " + request.uri());
          sendRequestAndPrintResponse(request);
@@ -278,11 +286,7 @@ public class TextFrontend {
              return;
          }
 
-         HttpRequest request = HttpRequest.newBuilder()
-                 .uri(URI.create(API_BASE_URL + "/games/" + gameId + "/players/" + accountId + "/hand"))
-                 .header("Content-Type", "application/json")
-                 .POST(BodyPublishers.ofString("{}"))
-                 .build();
+         HttpRequest request = buildRequest("POST", "/games/" + gameId + "/players/" + accountId + "/hand", "{}");
 
          System.out.println("Sending request to POST " + request.uri());
          sendRequestAndPrintResponse(request);
@@ -328,11 +332,7 @@ public class TextFrontend {
             payload.put("numCities", numCities);
             String jsonBody = objectMapper.writeValueAsString(payload);
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(API_BASE_URL + "/games/" + gameId + "/players/" + accountId + "/gain"))
-                    .header("Content-Type", "application/json")
-                    .POST(BodyPublishers.ofString(jsonBody))
-                    .build();
+            HttpRequest request = buildRequest("POST", "/games/" + gameId + "/players/" + accountId + "/gain", jsonBody);
 
             System.out.println("Sending request to POST " + request.uri());
             sendRequestAndPrintResponse(request);
@@ -369,11 +369,7 @@ public class TextFrontend {
            Map<String, Object> payload = Map.of("turnNumber", turnNumber);
            String jsonBody = objectMapper.writeValueAsString(payload);
 
-           HttpRequest request = HttpRequest.newBuilder()
-                   .uri(URI.create(API_BASE_URL + "/games/" + gameId + "/players/" + accountId + "/robber"))
-                   .header("Content-Type", "application/json")
-                   .POST(BodyPublishers.ofString(jsonBody))
-                   .build();
+           HttpRequest request = buildRequest("POST", "/games/" + gameId + "/players/" + accountId + "/robber", jsonBody);
 
            System.out.println("Sending request to POST " + request.uri());
            sendRequestAndPrintResponse(request);
@@ -442,27 +438,41 @@ public class TextFrontend {
       }
 
       private static void sendActionRequest(String actionType, Map<String, Object> details) throws Exception {
-           if (currentGameId == null) {
-                System.out.println("[Error] No game focus set. Use 'set_focus game <id>'.");
-                return;
-           }
+           if (!checkGameFocus()) return; // Use helper
 
            Map<String, Object> payload = new HashMap<>();
            payload.put("actionType", actionType);
            payload.put("details", details);
            String jsonBody = objectMapper.writeValueAsString(payload);
 
-           HttpRequest request = HttpRequest.newBuilder()
-                   .uri(URI.create(API_BASE_URL + "/games/" + currentGameId + "/action"))
-                   .header("Content-Type", "application/json")
-                   // .header("Authorization", "Bearer " + authToken) // Add if/when login/auth is implemented
-                   .POST(BodyPublishers.ofString(jsonBody))
-                   .build();
+           HttpRequest request = buildRequest("POST", "/games/" + currentGameId + "/action", jsonBody);
 
            System.out.println("Sending action request to POST " + request.uri());
            System.out.println("Payload: " + jsonBody);
            sendRequestAndPrintResponse(request);
       }
+
+
+    private static HttpRequest buildRequest(String method, String path, String jsonBody) {
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
+                .uri(URI.create(API_BASE_URL + path));
+
+        if (firebaseIdToken != null) {
+            builder.header("Authorization", "Bearer " + firebaseIdToken);
+        }
+
+        if ("GET".equalsIgnoreCase(method)) {
+            builder.GET();
+        } else if ("POST".equalsIgnoreCase(method)) {
+            builder.header("Content-Type", "application/json");
+            builder.POST(jsonBody == null || jsonBody.isEmpty() ? BodyPublishers.noBody() : BodyPublishers.ofString(jsonBody));
+        } else if ("DELETE".equalsIgnoreCase(method)) {
+            builder.DELETE();
+        }
+        // Add PUT, PATCH etc. if needed
+
+        return builder.build();
+    }
 
 
     private static HttpResponse<String> sendRequestAndGetResponse(HttpRequest request) throws Exception {
@@ -505,4 +515,5 @@ public class TextFrontend {
         System.out.println("---");
     }
 }
+
 
