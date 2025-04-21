@@ -66,7 +66,7 @@ public class TextFrontend {
             case "set_token":
                 handleSetToken(args);
                 break;
-            case "register": // Backend needs modification to handle this without password
+            case "register": 
                 handleRegister(args);
                 break;
             case "get_account":
