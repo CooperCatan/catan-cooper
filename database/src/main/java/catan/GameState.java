@@ -1,8 +1,8 @@
 package catan;
 
 import catan.util.DataTransferObject;
-import org.json.JSONObject;
-
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -10,8 +10,9 @@ import java.util.Random;
 public class GameState implements DataTransferObject {
     private long gameId;
     private long turnNumber;
-    private List<Hex> hexes;
-    private Vertex[] vertices;
+    private String jsonHexes;
+    private String jsonVertices;
+    private String jsonEdges;
     private Long winnerId;
     private boolean isGameOver;
     private long bankBrick;
@@ -28,13 +29,13 @@ public class GameState implements DataTransferObject {
     public GameState() {}
 
     public void newGame() {
-        this.vertices = new Vertex[54];
+        vertices = new Vertex[54];
         //Make all the vertices on the board
         for (int i = 0; i < 54; i++) {
             this.vertices[i] = new Vertex(i+1);
         }
         //Make a list of hexes
-        this.hexes = new ArrayList<>();
+        hexes = new ArrayList<>();
 
         //Make the lists of resources and roll values, and then shuffle them
         List<String> resources = new ArrayList<>(Arrays.asList(
@@ -45,9 +46,7 @@ public class GameState implements DataTransferObject {
                 "sheep", "sheep", "sheep", "sheep",
                 "desert"
         ));
-        List<Integer> rvs = new ArrayList<>(Arrays.asList(
-                2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12
-        ));
+        List<Integer> rvs = new ArrayList<>(Arrays.asList(2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12));
         Collections.shuffle(rvs);
         Collections.shuffle(resources);
 
@@ -65,9 +64,88 @@ public class GameState implements DataTransferObject {
             }
             hexes.add(insert);
             //Now assign all of these hexes their adjacent vertices
-            //The linker also handles
+            //The linker also handles edges
             linkVertices(insert);
         }
+
+        Gson gson = new Gson();
+        String jHexes = board.serializeHex(hexes, gson);
+        String jVertices = board.serializeVertex(hexes, gson);
+        String jEdges = board.serializeEdges(hexes, gson);
+    }
+
+    public String serializeHex(List<Hex> hexes, Gson gson) {
+        return gson.toJson(hexes);
+    }
+
+    public String serializeVertex(List<Hex> hexes, Gson gson) {
+        Map<Integer, Vertex> vertexMap = new HashMap<>();
+
+        for (Hex hex : hexes) {
+            for (Vertex v : hex.getVertices()) {
+                vertexMap.putIfAbsent(v.getId(), v);
+            }
+        }
+
+        return gson.toJson(new ArrayList<>(vertexMap.values()));
+    }
+
+    public String serializeEdges(List<Hex> hexes, Gson gson) {
+        Map<String, Edge> edgeMap = new HashMap<>();
+
+        for (Hex hex : hexes) {
+            for (Vertex vex : hex.getVertices()) {
+                for (Edge cross : vex.getAdjacentEdges()) {
+                    String key = cross.getVertex1() < cross.getVertex2() ? cross.getVertex1() + "-" + cross.getVertex2() : cross.getVertex2() + "-" + cross.getVertex1();
+                    edgeMap.putIfAbsent(key, cross);
+                }
+            }
+        }
+
+        return gson.toJson(new ArrayList<>(edgeMap.values()));
+    }
+
+    public List<Hex> deserialize(String jHexes, String jVertices, String jEdges, Gson gson) {
+        List<Hex> hexes = gson.fromJson(jHexes, new TypeToken<List<Hex>>(){}.getType());
+        List<Vertex> vertices = gson.fromJson(jVertices, new TypeToken<List<Vertex>>(){}.getType());
+        List<Edge> edges = gson.fromJson(jEdges, new TypeToken<List<Edge>>(){}.getType());
+
+        //Mappings lets us find by id quickly
+        Map<Integer, Vertex> vertexMap = new HashMap<>();
+        Map<String, Edge> edgeMap = new HashMap<>();
+        for (Vertex v : vertices) {
+            vertexMap.put(v.getId(), v);
+        }
+        for (Edge edge : edges) {
+            int v1 = edge.getVertex1();
+            int v2 = edge.getVertex2();
+            String key = v1 < v2 ? v1 + "-" + v2 : v2 + "-" + v1;
+            edgeMap.put(key, edge);
+        }
+
+        //Link up hexes and add appropriate edges across vertices
+        for (Hex hex : hexes) {
+            //Think this could also go i < 6
+            for (int i = 0; i < hex.getVertexIds().size(); i++) {
+                Integer vertexId = hex.getVertexIds().get(i);
+                hex.setVertex(i, vertexMap.get(vertexId));
+                //Now that the hex has mapped to this vertex, fill out its edges on the graph
+                for(Integer target : hex.getVertices().get(i).getAdjacentEdgeIds()) {
+                    //Key goes one way to prevent duplication (1-5 edge is the same as 5-1 edge)
+                    //May be redundant with the way edges are set up initially
+                    String key = vertexId < target ? vertexId + "-" + target : target + "-" + vertexId;
+                    Edge cross = edgeMap.get(key);
+
+                    if(cross == null) {
+                        System.out.println(vertexId + "-" + target);
+                    } else if(hex.getVertices().get(i).getAdjacentEdges() == null || !(vertexId == cross.getVertex1() || vertexId == cross.getVertex2())) {
+                        hex.getVertices().get(i).addEdge(vertexMap.get(target), cross.hasRoad(), cross.getPlayerId());
+                    }
+                }
+            }
+        }
+
+        return hexes;
     }
 
     public void linkVertices(Hex index) {
@@ -113,6 +191,9 @@ public class GameState implements DataTransferObject {
             index.setVertex(3, vertices[2*index.getId()+15]);
             index.setVertex(4, vertices[2*index.getId()+14]);
             index.setVertex(5, vertices[2*index.getId()+13]);
+        } else {
+            //Invalid, try not to Seg Fault from hex vertex list
+            return;
         }
         //Add edges to this hex list
         for (int i = 0; i < 6; i++) {
@@ -131,14 +212,14 @@ public class GameState implements DataTransferObject {
     public long getTurnNumber() { return turnNumber; }
     public void setTurnNumber(long turnNumber) { this.turnNumber = turnNumber; }
 
-    public JSONObject getBoardState() { return boardState; }
-    public void setBoardState(JSONObject boardState) { this.boardState = boardState; }
+    public String getBoardState() { return boardState; }
+    public void setBoardState(String boardState) { this.boardState = boardState; }
 
     public Long getWinnerId() { return winnerId; }
     public void setWinnerId(Long winnerId) { this.winnerId = winnerId; }
 
-    public JSONObject getRobberLocation() { return robberLocation; }
-    public void setRobberLocation(JSONObject robberLocation) { this.robberLocation = robberLocation; }
+    public String getRobberLocation() { return robberLocation; }
+    public void setRobberLocation(String robberLocation) { this.robberLocation = robberLocation; }
 
     public boolean isGameOver() { return isGameOver; }
     public void setGameOver(boolean gameOver) { isGameOver = gameOver; }
@@ -213,10 +294,15 @@ public class GameState implements DataTransferObject {
         return;
     }
 
+
+
     public int rollDice() {
         int roll = (int) (Math.random() * 6) + 1 + (int) (Math.random() * 6) + 1;
+        //Unpack the JSON gameState to set up the hex list
+        Gson gson = new Gson();
+        List<Hex> hexes = this.deserialize(jsonHexes, jsonVertices, jsonEdges, gson);
         //Go through each hex and find what to give
-        for (Hex hex : this.hexes) {
+        for (Hex hex : hexes) {
             //Only give resources to hexes matching the roll value
             if(hex.getRollValue() == roll) {
                 for (Vertex vex : hex.getVertices()) {
@@ -229,11 +315,11 @@ public class GameState implements DataTransferObject {
                             return;
                         }
                         switch(hex.getResource()) {
-                            case "brick" -> playerState.setBrick(playerState.getBrick() + 1);
-                            case "wood" -> playerState.setWood(playerState.getWood() + 1);
-                            case "wheat" -> playerState.setWheat(playerState.getWheat() + 1);
-                            case "ore" -> playerState.setOre(playerState.getOre() + 1);
-                            case "wool" -> playerState.setWool(playerState.getWool() + 1);
+                            case "brick" -> playerState.setBrick(playerState.getBrick() + vex.getBuildingType());
+                            case "wood" -> playerState.setWood(playerState.getWood() + vex.getBuildingType());
+                            case "wheat" -> playerState.setWheat(playerState.getWheat() + vex.getBuildingType());
+                            case "ore" -> playerState.setOre(playerState.getOre() + vex.getBuildingType());
+                            case "wool" -> playerState.setWool(playerState.getWool() + vex.getBuildingType());
                         }
                         playerStateDAO.update(playerState);
                     }

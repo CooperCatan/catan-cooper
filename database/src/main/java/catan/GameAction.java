@@ -59,7 +59,7 @@ public class GameAction implements DataTransferObject {
                 //Check if the player can pay for the settlement, subtract funds if possible
                 if (playerState.paySettlement()) {
                     //Check if the player can place the settlement, do so if possible, refund if not
-                    if(!gameState.placeSettlement(accountId)) {
+                    if(!gameState.placeSettlement(vertex, accountId)) {
                         playerState.refundSettlement();
                     }
                 }
@@ -68,7 +68,7 @@ public class GameAction implements DataTransferObject {
                 //Check if the player can pay for the city, subtract funds if possible
                 if (playerState.payCity()) {
                     //Check if the player can place the city, do so if possible, refund if not
-                    if(!gameState.placeCity(accountId)) {
+                    if(!gameState.placeCity(vertex, accountId)) {
                         playerState.refundCity();
                     }
                 }
@@ -77,7 +77,7 @@ public class GameAction implements DataTransferObject {
                 //Check if the player can pay for the road, subtract funds if possible
                 if (playerState.payRoad()) {
                     //Check if the player can place the road, do so if possible, refund if not
-                    if(!gameState.placeRoad(accountId)) {
+                    if(!gameState.placeRoad(vertex1, vertex2, accountId)) {
                         playerState.refundRoad();
                     }
                 }
