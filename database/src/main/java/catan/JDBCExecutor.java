@@ -1,63 +1,60 @@
-package catan.util;
+package catan;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Function;
 
 public class JDBCExecutor {
-    private final DatabaseConnectionManager connectionManager;
 
-    public JDBCExecutor(DatabaseConnectionManager connectionManager) {
-        this.connectionManager = connectionManager;
-    }
+    public static void main(String... args) {
+        System.out.println("Testing JDBC Connection and Account Operations");
+        DatabaseConnectionManager dcm = new DatabaseConnectionManager("db",
+                "catan", "postgres", "password");
 
-    public <T> T executeQuery(String sql, Function<ResultSet, T> mapper, Object... params) {
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            for (int i = 0; i < params.length; i++) {
-                stmt.setObject(i + 1, params[i]);
+        try {
+            Connection connection = dcm.getConnection();
+            AccountDAO accountDAO = new AccountDAO(connection);
+
+            try {
+                Account account = accountDAO.findById(1);
+                System.out.println("Found account: " + account.toString());
+            } catch (Exception e) {
+                System.out.println("Could not find account with ID 1 (this is normal if no accounts exist yet)");
             }
-            
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                return mapper.apply(rs);
-            }
-        } catch (SQLException e) {
+
+            Account newAccount = new Account();
+            newAccount.setUsername("TestUser");
+            newAccount.setPassword("testpass123");
+            newAccount.setTotalGames(0);
+            newAccount.setTotalWins(0);
+            newAccount.setTotalLosses(0);
+            newAccount.setElo(1000);
+
+            newAccount = accountDAO.create(newAccount);
+            System.out.println("Created account: " + newAccount.toString());
+
+            newAccount = accountDAO.updateUsername(newAccount.getId(), "UpdatedUsername");
+            System.out.println("Updated username: " + newAccount.toString());
+
+            newAccount = accountDAO.updatePassword(newAccount.getId(), "newpass456");
+            System.out.println("Updated password: " + newAccount.toString());
+
+            newAccount = accountDAO.updateElo(newAccount.getId(), 1200);
+            System.out.println("Updated ELO: " + newAccount.toString());
+
+            newAccount = accountDAO.incrementWins(newAccount.getId());
+            System.out.println("After win: " + newAccount.toString());
+
+            newAccount = accountDAO.incrementLosses(newAccount.getId());
+            System.out.println("After loss: " + newAccount.toString());
+
+            boolean deleted = accountDAO.delete(newAccount.getId());
+            System.out.println("Account deleted: " + deleted);
+
+        } catch(SQLException e) {
+            System.err.println("Database connection error:");
             e.printStackTrace();
-        }
-        return null;
-    }
-
-    public <T> List<T> executeQueryList(String sql, Function<ResultSet, T> mapper) {
-        List<T> results = new ArrayList<>();
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            ResultSet rs = stmt.executeQuery();
-            while (rs.next()) {
-                results.add(mapper.apply(rs));
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return results;
-    }
-
-    public void executeUpdate(String sql, Object... params) {
-        try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            for (int i = 0; i < params.length; i++) {
-                stmt.setObject(i + 1, params[i]);
-            }
-            
-            stmt.executeUpdate();
-        } catch (SQLException e) {
+        } catch(Exception e) {
+            System.err.println("Unexpected error:");
             e.printStackTrace();
         }
     }

@@ -1,37 +1,27 @@
 package catan;
 
 import catan.util.DataTransferObject;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 
 public class Account implements DataTransferObject {
-    private long id;
+
+    private long accountId;
     private String username;
     private String password;
+    private long totalGames;
     private long totalWins;
     private long totalLosses;
-    private long totalGames;
-    private int elo;
+    private long elo;
 
-    public Account() {}
-
-    public Account(ResultSet rs) throws SQLException {
-        this.id = rs.getLong("account_id");
-        this.username = rs.getString("username");
-        this.password = rs.getString("password");
-        this.totalWins = rs.getLong("total_wins");
-        this.totalLosses = rs.getLong("total_losses");
-        this.totalGames = rs.getLong("total_games");
-        this.elo = rs.getInt("elo");
-    }
-
-    @Override
     public long getId() {
-        return id;
+        return accountId;
     }
 
-    public void setId(long id) {
-        this.id = id;
+    public long getAccountId() {
+        return accountId;
+    }
+
+    public void setAccountId(long accountId) {
+        this.accountId = accountId;
     }
 
     public String getUsername() {
@@ -50,6 +40,14 @@ public class Account implements DataTransferObject {
         this.password = password;
     }
 
+    public long getTotalGames() {
+        return totalGames;
+    }
+
+    public void setTotalGames(long totalGames) {
+        this.totalGames = totalGames;
+    }
+
     public long getTotalWins() {
         return totalWins;
     }
@@ -66,30 +64,23 @@ public class Account implements DataTransferObject {
         this.totalLosses = totalLosses;
     }
 
-    public long getTotalGames() {
-        return totalGames;
-    }
-
-    public void setTotalGames(long totalGames) {
-        this.totalGames = totalGames;
-    }
-
-    public int getElo() {
+    public long getElo() {
         return elo;
     }
 
-    public void setElo(int elo) {
+    public void setElo(long elo) {
         this.elo = elo;
     }
 
     @Override
     public String toString() {
         return "Account{" +
-                "id=" + id +
+                "accountId=" + accountId +
                 ", username='" + username + '\'' +
+                ", password='" + password + '\'' +
+                ", totalGames=" + totalGames +
                 ", totalWins=" + totalWins +
                 ", totalLosses=" + totalLosses +
-                ", totalGames=" + totalGames +
                 ", elo=" + elo +
                 '}';
     }

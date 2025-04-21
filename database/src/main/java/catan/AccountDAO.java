@@ -1,58 +1,134 @@
 package catan;
 
 import catan.util.DataAccessObject;
-import catan.util.DatabaseConnectionManager;
-import catan.util.JDBCExecutor;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.List;
 
-public class AccountDAO implements DataAccessObject<Account> {
-    private final DatabaseConnectionManager connectionManager;
-    private final JDBCExecutor executor;
+public class AccountDAO extends DataAccessObject<Account> {
 
-    public AccountDAO() {
-        this.connectionManager = new DatabaseConnectionManager();
-        this.executor = new JDBCExecutor(connectionManager);
-    }
+    private static final String GET_ONE = "SELECT * FROM account WHERE account_id=?";
+    private static final String INSERT = "INSERT INTO account (username, password, total_games, total_wins, total_losses, elo) " +
+            "VALUES (?, ?, ?, ?, ?, ?)";
+    private static final String DELETE = "DELETE FROM account WHERE account_id=?";
+    private static final String UPDATE_USERNAME = "UPDATE account SET username=? WHERE account_id=?";
+    private static final String UPDATE_PASSWORD = "UPDATE account SET password=? WHERE account_id=?";
+    private static final String UPDATE_ELO = "UPDATE account SET elo=? WHERE account_id=?";
+    private static final String INCREMENT_WINS = "UPDATE account SET total_wins = total_wins + 1, total_games = total_games + 1 WHERE account_id=?";
+    private static final String INCREMENT_LOSSES = "UPDATE account SET total_losses = total_losses + 1, total_games = total_games + 1 WHERE account_id=?";
 
-    @Override
-    public void create(Account account) {
-        String sql = "INSERT INTO accounts (username, password, elo) VALUES (?, ?, ?)";
-        executor.executeUpdate(sql, account.getUsername(), account.getPassword(), account.getElo());
+    public AccountDAO(Connection connection) {
+        super(connection);
     }
 
     @Override
     public Account findById(long id) {
-        String sql = "SELECT * FROM accounts WHERE account_id = ?";
-        return executor.executeQuery(sql, this::mapResultSetToAccount, id);
-    }
-
-    @Override
-    public List<Account> findAll() {
-        String sql = "SELECT * FROM accounts";
-        return executor.executeQueryList(sql, this::mapResultSetToAccount);
-    }
-
-    @Override
-    public void update(Account account) {
-        String sql = "UPDATE accounts SET username = ?, password = ?, elo = ? WHERE account_id = ?";
-        executor.executeUpdate(sql, account.getUsername(), account.getPassword(), account.getElo(), account.getId());
-    }
-
-    @Override
-    public void delete(long id) {
-        String sql = "DELETE FROM accounts WHERE account_id = ?";
-        executor.executeUpdate(sql, id);
-    }
-
-    private Account mapResultSetToAccount(ResultSet rs) throws SQLException {
         Account account = new Account();
-        account.setId(rs.getLong("account_id"));
-        account.setUsername(rs.getString("username"));
-        account.setPassword(rs.getString("password"));
-        account.setElo(rs.getInt("elo"));
+        try(PreparedStatement statement = this.connection.prepareStatement(GET_ONE)) {
+            statement.setLong(1, id);
+            ResultSet rs = statement.executeQuery();
+            while(rs.next()) {
+                account.setAccountId(rs.getLong("account_id"));
+                account.setUsername(rs.getString("username"));
+                account.setPassword(rs.getString("password"));
+                account.setTotalGames(rs.getLong("total_games"));
+                account.setTotalWins(rs.getLong("total_wins"));
+                account.setTotalLosses(rs.getLong("total_losses"));
+                account.setElo(rs.getLong("elo"));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
         return account;
+    }
+
+    @Override
+    public Account create(Account dto) {
+        try(PreparedStatement statement = this.connection.prepareStatement(INSERT)) {
+            statement.setString(1, dto.getUsername());
+            statement.setString(2, dto.getPassword());
+            statement.setLong(3, dto.getTotalGames());
+            statement.setLong(4, dto.getTotalWins());
+            statement.setLong(5, dto.getTotalLosses());
+            statement.setLong(6, dto.getElo());
+            statement.execute();
+            int id = this.getLastVal(ACCOUNT_SEQUENCE);
+            return this.findById(id);
+        } catch(SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public boolean delete(long id) {
+        try(PreparedStatement statement = this.connection.prepareStatement(DELETE)) {
+            statement.setLong(1, id);
+            return statement.executeUpdate() > 0;
+        } catch(SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Account updateUsername(long id, String newUsername) {
+        try(PreparedStatement statement = this.connection.prepareStatement(UPDATE_USERNAME)) {
+            statement.setString(1, newUsername);
+            statement.setLong(2, id);
+            statement.execute();
+            return this.findById(id);
+        } catch(SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Account updatePassword(long id, String newPassword) {
+        try(PreparedStatement statement = this.connection.prepareStatement(UPDATE_PASSWORD)) {
+            statement.setString(1, newPassword);
+            statement.setLong(2, id);
+            statement.execute();
+            return this.findById(id);
+        } catch(SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Account updateElo(long id, long newElo) {
+        try(PreparedStatement statement = this.connection.prepareStatement(UPDATE_ELO)) {
+            statement.setLong(1, newElo);
+            statement.setLong(2, id);
+            statement.execute();
+            return this.findById(id);
+        } catch(SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Account incrementWins(long id) {
+        try(PreparedStatement statement = this.connection.prepareStatement(INCREMENT_WINS)) {
+            statement.setLong(1, id);
+            statement.execute();
+            return this.findById(id);
+        } catch(SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Account incrementLosses(long id) {
+        try(PreparedStatement statement = this.connection.prepareStatement(INCREMENT_LOSSES)) {
+            statement.setLong(1, id);
+            statement.execute();
+            return this.findById(id);
+        } catch(SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
     }
 }

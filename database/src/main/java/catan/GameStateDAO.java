@@ -16,10 +16,10 @@ public class GameStateDAO extends DataAccessObject<GameState> {
     private static final String GET_LATEST =
             "SELECT * FROM game_state WHERE game_id=? ORDER BY turn_number DESC LIMIT 1";
     private static final String INSERT =
-            "INSERT INTO game_state (game_id, turn_number, board_state, winner_id, robber_location, is_game_over, " +
+            "INSERT INTO game_state (game_id, turn_number, json_hexes, json_vertices, json_edges, winner_id, robber_location, is_game_over, " +
                     "bank_brick, bank_ore, bank_sheep, bank_wheat, bank_wood, bank_year_of_plenty, bank_monopoly, " +
                     "bank_road_building, bank_victory_point, bank_knight) " +
-                    "VALUES (nextval('game_id_seq'), ?, ?::jsonb, ?, ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+                    "VALUES (nextval('game_id_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
                     "RETURNING game_id";
     private static final String DELETE_GAME_ACTIONS =
             "DELETE FROM game_action WHERE game_id=?";
@@ -78,25 +78,27 @@ public class GameStateDAO extends DataAccessObject<GameState> {
             System.out.println("DEBUG - Preparing to insert game state with turn number: " + dto.getTurnNumber());
 
             // always start with turn 0 for a new game
-            statement.setLong(1, 0);
+            statement.setLong(1, dto.getTurnNumber());
             statement.setString(2, dto.getBoardState() != null ? dto.getBoardState().toString() : "{}");
+             statement.setString(3, dto.getVertexState() != null ? dto.getVertexState().toString() : "{}");
+             statement.setString(4, dto.getEdgeState() != null ? dto.getEdgeState().toString() : "{}");
             if (dto.getWinnerId() != null) {
-                statement.setLong(3, dto.getWinnerId());
+                statement.setLong(5, dto.getWinnerId());
             } else {
-                statement.setNull(3, java.sql.Types.BIGINT);
+                statement.setNull(5, java.sql.Types.BIGINT);
             }
-            statement.setString(4, dto.getRobberLocation() != null ? dto.getRobberLocation().toString() : "{\"hex\": \"desert\"}");
-            statement.setBoolean(5, dto.isGameOver());
-            statement.setLong(6, dto.getBankBrick());
-            statement.setLong(7, dto.getBankOre());
-            statement.setLong(8, dto.getBankSheep());
-            statement.setLong(9, dto.getBankWheat());
-            statement.setLong(10, dto.getBankWood());
-            statement.setLong(11, dto.getBankYearOfPlenty());
-            statement.setLong(12, dto.getBankMonopoly());
-            statement.setLong(13, dto.getBankRoadBuilding());
-            statement.setLong(14, dto.getBankVictoryPoint());
-            statement.setLong(15, dto.getBankKnight());
+            statement.setString(6, dto.getRobberLocation() != null ? dto.getRobberLocation().toString() : "{\"hex\": \"desert\"}");
+            statement.setBoolean(7, dto.isGameOver());
+            statement.setLong(8, dto.getBankBrick());
+            statement.setLong(9, dto.getBankOre());
+            statement.setLong(10, dto.getBankSheep());
+            statement.setLong(11, dto.getBankWheat());
+            statement.setLong(12, dto.getBankWood());
+            statement.setLong(13, dto.getBankYearOfPlenty());
+            statement.setLong(14, dto.getBankMonopoly());
+            statement.setLong(15, dto.getBankRoadBuilding());
+            statement.setLong(16, dto.getBankVictoryPoint());
+            statement.setLong(17, dto.getBankKnight());
 
             System.out.println("DEBUG - Executing SQL: " + INSERT);
 

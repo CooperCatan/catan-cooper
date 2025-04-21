@@ -294,11 +294,29 @@ public class GameState implements DataTransferObject {
         return;
     }
 
+    public int placeCity(int v, Long accountId) {
+        Gson gson = new Gson();
+        List<Hex> hexes = this.deserialize(this.jsonHexes, this.jsonVertices, this.jsonEdges, gson);
+        //Look for the right vertex in the deserialized board
+        for(Hex hex : hexes) {
+            for(Vertex vex : hex.getVertices()) {
+                if(vex.getId() == v) {
+                    if(vex.setBuilding(2, accountId)) {
+                        return 1;
+                    }
+                    return 0;
+                }
+            }
+        }
+        return 0;
+    }
+
     public int placeSettlement(int v, Long accountId) {
         Gson gson = new Gson();
         List<Hex> hexes = this.deserialize(this.jsonHexes, this.jsonVertices, this.jsonEdges, gson);
-        for (Hex hex : hexes) {
-            for (Vertex vex : hex.getVertices()) {
+        //Look for the right vertex in the deserialized board
+        for(Hex hex : hexes) {
+            for(Vertex vex : hex.getVertices()) {
                 if(vex.getId() == v) {
                     boolean validRoad = false;
                     for(Edge findRoad : vex.getAdjacentEdges()) {
