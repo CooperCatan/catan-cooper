@@ -294,13 +294,46 @@ public class GameState implements DataTransferObject {
         return;
     }
 
-
+    public int placeSettlement(int v, Long accountId) {
+        Gson gson = new Gson();
+        List<Hex> hexes = this.deserialize(this.jsonHexes, this.jsonVertices, this.jsonEdges, gson);
+        for (Hex hex : hexes) {
+            for (Vertex vex : hex.getVertices()) {
+                if(vex.getId() == v) {
+                    boolean validRoad = false;
+                    for(Edge findRoad : vex.getAdjacentEdges()) {
+                        if(findRoad.hasRoad() && (findRoad.getPlayerId() == accountId)) {
+                            validRoad = true
+                        }
+                    }
+                    if(!validRoad) {
+                        return 0;
+                    }
+                    boolean noneAdjacent = true;
+                    for(i = 0; i < vex.getAdjacentEdgeIds().size(); i++) {
+                        for(Hex targetHex : hexes) {
+                            for(Vertex targetVex : targetHex.getVertices()) {
+                                if(targetVex.getId() == vex.getAdjacentEdgeIds().get(i) && targetVex.getBuildingType()) {
+                                    noneAdjacent = false;
+                                }
+                            }
+                        }
+                    }
+                    if(noneAdjacent && validRoad && vex.setBuilding(1, accountId)) {
+                        return true;
+                    }
+                    return 0;
+                }
+            }
+        }
+        return 0;
+    }
 
     public int rollDice() {
         int roll = (int) (Math.random() * 6) + 1 + (int) (Math.random() * 6) + 1;
         //Unpack the JSON gameState to set up the hex list
         Gson gson = new Gson();
-        List<Hex> hexes = this.deserialize(jsonHexes, jsonVertices, jsonEdges, gson);
+        List<Hex> hexes = this.deserialize(this.jsonHexes, this.jsonVertices, this.jsonEdges, gson);
         //Go through each hex and find what to give
         for (Hex hex : hexes) {
             //Only give resources to hexes matching the roll value

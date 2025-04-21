@@ -1,4 +1,4 @@
-package catan;
+    package catan;
 
 import catan.util.DataAccessObject;
 import catan.util.DatabaseConnectionManager;
