@@ -36,3 +36,13 @@
     transform: rotate(360deg);
   }
 }
+
+.app {
+  min-height: 100vh;
+}
+
+main {
+  padding-top: 80px;
+  width: 100%;
+  overflow-x: hidden;
+}

@@ -1,24 +1,20 @@
 import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import NavBar from './components/navigation/NavBar';
+import HeroSection from './components/home/HeroSection';
+import FeaturesSection from './components/home/FeaturesSection';
+import AboutSection from './components/home/AboutSection';
+import CTASection from './components/home/CTASection';
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div className="min-h-screen">
+      <NavBar />
+      <main>
+        <HeroSection />
+        <FeaturesSection />
+        <AboutSection />
+        <CTASection />
+      </main>
     </div>
   );
 }
