@@ -1,8 +1,6 @@
-
 DROP TABLE IF EXISTS game_action;
 DROP TABLE IF EXISTS trade;
 DROP TABLE IF EXISTS player_state;
-DROP TABLE IF EXISTS bank_cards_remaining;
 DROP TABLE IF EXISTS game_state;
 DROP TABLE IF EXISTS account;
 
@@ -15,8 +13,8 @@ CREATE SEQUENCE turn_number_seq START WITH 1 INCREMENT BY 1;
 
 CREATE TABLE account (
     account_id bigint DEFAULT nextval('account_id_seq'),
-    username varchar(255),
-    password varchar(255),
+    username varchar(255) UNIQUE NOT NULL,
+    email varchar(255) UNIQUE NOT NULL,
     total_wins bigint DEFAULT 0,
     total_losses bigint DEFAULT 0,
     total_games bigint DEFAULT 0 CHECK (
@@ -24,7 +22,7 @@ CREATE TABLE account (
         AND total_losses >= 0
         AND total_games = total_losses + total_wins
     ),
-    elo bigint DEFAULT 0,
+    elo bigint DEFAULT 1000,
     PRIMARY KEY (account_id)
 );
 
@@ -45,10 +43,9 @@ CREATE TABLE game_state (
     bank_road_building bigint DEFAULT 2,
     bank_victory_point bigint DEFAULT 5,
     bank_knight bigint DEFAULT 14,
-    PRIMARY KEY (game_id, turn_number)
+    PRIMARY KEY (game_id, turn_number),
+    FOREIGN KEY (winner_id) REFERENCES account(account_id)
 );
-
-
 
 CREATE TABLE player_state (
     account_id bigint,

@@ -23,7 +23,7 @@ public class JDBCExecutor {
 
             Account newAccount = new Account();
             newAccount.setUsername("TestUser");
-            newAccount.setPassword("testpass123");
+            newAccount.setEmail("testemail@email.com");
             newAccount.setTotalGames(0);
             newAccount.setTotalWins(0);
             newAccount.setTotalLosses(0);
@@ -34,9 +34,6 @@ public class JDBCExecutor {
 
             newAccount = accountDAO.updateUsername(newAccount.getId(), "UpdatedUsername");
             System.out.println("Updated username: " + newAccount.toString());
-
-            newAccount = accountDAO.updatePassword(newAccount.getId(), "newpass456");
-            System.out.println("Updated password: " + newAccount.toString());
 
             newAccount = accountDAO.updateElo(newAccount.getId(), 1200);
             System.out.println("Updated ELO: " + newAccount.toString());

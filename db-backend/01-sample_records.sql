@@ -1,9 +1,11 @@
-INSERT INTO account (username, password, total_wins, total_losses, total_games, elo)
+-- changed s.t. we are not storing passwords as plaintext anymore, storing emails for firebase auth
+
+INSERT INTO account (username, email, total_wins, total_losses, total_games, elo)
 VALUES 
-('Surinderpal', 'sheepnotsyphilis', 5, 3, 8, 1200),
-('Mohamed', 'iloveports123', 3, 4, 7, 1150),
-('IsaacS', 'bestatcatan', 4, 2, 6, 1250),
-('IsaacM', 'stonenotore', 2, 5, 7, 1100);
+('Surinderpal', 'surinderpal@cooper.edu', 5, 3, 8, 1200),
+('Mohamed', 'mohamed@cooper.edu', 3, 4, 7, 1150),
+('IsaacS', 'isaacs@cooper.edu', 4, 2, 6, 1250),
+('IsaacM', 'isaacm@cooper.edu', 2, 5, 7, 1100);
 
 INSERT INTO game_state (game_id, turn_number, winner_id, robber_location, is_game_over, bank_brick, bank_ore, bank_sheep, bank_wheat, bank_wood, bank_year_of_plenty, bank_monopoly, bank_road_building, bank_victory_point, bank_knight)
 VALUES
