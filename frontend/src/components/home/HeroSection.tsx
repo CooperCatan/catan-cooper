@@ -14,7 +14,7 @@ const HeroSection = () => {
           backgroundPosition: 'center 20%'
         }}
       >
-        <div className="absolute inset-0 bg-black/30"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 to-black/50"></div>
       </div>
 
       {/* Content */}
@@ -24,7 +24,7 @@ const HeroSection = () => {
             Build Your Empire in
             <span className="text-catan-brick block mt-2 italic">Cooper Union's Catan</span>
           </h1>
-          <p className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto mb-8">
+          <p className="text-lg sm:text-xl text-white max-w-2xl mx-auto mb-8">
             Trade, build, and compete
             with players from around the world in a modern digital adaptation.
           </p>
@@ -39,7 +39,7 @@ const HeroSection = () => {
         </div>
       </div>
     </section>
-  );
+  )
 };
 
 export default HeroSection;
