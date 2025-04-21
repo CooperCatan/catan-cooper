@@ -7,6 +7,7 @@ public class Account implements DataTransferObject {
     private long accountId;
     private String username;
     private String password;
+    private String firebaseUid;
     private long totalGames;
     private long totalWins;
     private long totalLosses;
@@ -38,6 +39,14 @@ public class Account implements DataTransferObject {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public String getFirebaseUid() {
+        return firebaseUid;
+    }
+
+    public void setFirebaseUid(String firebaseUid) {
+        this.firebaseUid = firebaseUid;
     }
 
     public long getTotalGames() {
