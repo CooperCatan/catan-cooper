@@ -75,7 +75,6 @@ public class GameStateDAO extends DataAccessObject<GameState> {
     @Override
     public GameState create(GameState dto) {
         try (PreparedStatement statement = this.connection.prepareStatement(INSERT, Statement.RETURN_GENERATED_KEYS)) {
-            System.out.println("DEBUG - Preparing to insert game state with turn number: " + dto.getTurnNumber());
             
             // always start with turn 0 for a new game
             statement.setLong(1, 0);
@@ -97,11 +96,8 @@ public class GameStateDAO extends DataAccessObject<GameState> {
             statement.setLong(13, dto.getBankRoadBuilding());
             statement.setLong(14, dto.getBankVictoryPoint());
             statement.setLong(15, dto.getBankKnight());
-            
-            System.out.println("DEBUG - Executing SQL: " + INSERT);
-            
+                        
             int affectedRows = statement.executeUpdate();
-            System.out.println("DEBUG - Affected rows: " + affectedRows);
             
             if (affectedRows == 0) {
                 throw new SQLException("Creating game state failed, no rows affected.");
@@ -110,7 +106,6 @@ public class GameStateDAO extends DataAccessObject<GameState> {
             try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
                     long gameId = generatedKeys.getLong(1);
-                    System.out.println("DEBUG - Generated game_id: " + gameId);
                     return findByGameIdAndTurn(gameId, 0);
                 } else {
                     throw new SQLException("Creating game state failed, no ID obtained.");

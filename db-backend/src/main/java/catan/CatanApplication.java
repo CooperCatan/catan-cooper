@@ -10,9 +10,13 @@ import java.sql.SQLException;
 import java.util.Map;
 import java.util.HashMap;
 import org.springframework.http.HttpStatus;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.List;
 
 @SpringBootApplication
 @RestController
+@CrossOrigin(origins = {"http://localhost:3000"}, allowCredentials = "true")
 public class CatanApplication {
 
 	private final DatabaseConnectionManager dcm = new DatabaseConnectionManager("db",
@@ -20,32 +24,78 @@ public class CatanApplication {
 
 	@PostMapping("/api/account")
 	public ResponseEntity<?> createAccount(@RequestBody Map<String, String> accountData) {
-		if (accountData.get("username") == null || accountData.get("username").trim().isEmpty()) {
-			return ResponseEntity.badRequest().body("Username is required");
+		if (accountData == null) {
+			return ResponseEntity.badRequest().body(Map.of(
+				"error", "Validation failed",
+				"message", "Request body is required"
+			));
 		}
-		if (accountData.get("password") == null || accountData.get("password").trim().isEmpty()) {
-			return ResponseEntity.badRequest().body("Password is required");
+
+		String username = accountData.get("username");
+		if (username == null || username.trim().isEmpty()) {
+			return ResponseEntity.badRequest().body(Map.of(
+				"error", "Validation failed",
+				"message", "Username is required"
+			));
+		}
+
+		String email = accountData.get("email");
+		if (email == null || email.trim().isEmpty()) {
+			return ResponseEntity.badRequest().body(Map.of(
+				"error", "Validation failed",
+				"message", "Email is required"
+			));
 		}
 
 		try (Connection connection = dcm.getConnection()) {
+			try (PreparedStatement stmt = connection.prepareStatement("SELECT COUNT(*) FROM account WHERE username = ?")) {
+				stmt.setString(1, username.trim());
+				ResultSet rs = stmt.executeQuery();
+				if (rs.next() && rs.getInt(1) > 0) {
+					return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+						"error", "Username taken",
+						"message", "This username is already in use"
+					));
+				}
+			}
+
 			AccountDAO accountDAO = new AccountDAO(connection);
 			Account account = new Account();
 			
-			account.setUsername(accountData.get("username").trim());
-			account.setPassword(accountData.get("password"));
-
-			// initialize stats to 0 upon account creation
+			account.setUsername(username.trim());
+			account.setEmail(email.trim());
 			account.setTotalGames(0);
 			account.setTotalWins(0);
 			account.setTotalLosses(0);
-			account.setElo(1000); // default ELO, can change later
+			account.setElo(1000);
 			
-			Account createdAccount = accountDAO.create(account);
-			return ResponseEntity.ok(createdAccount);
+			try {
+				Account createdAccount = accountDAO.create(account);
+				if (createdAccount == null) {
+					return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+						.body(Map.of(
+							"error", "Creation failed",
+							"message", "Failed to create account in database"
+						));
+				}
+				return ResponseEntity.ok(createdAccount);
+			} catch (RuntimeException e) {
+				e.printStackTrace();
+				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+					.body(Map.of(
+						"error", "Database error",
+						"message", e.getMessage(),
+						"details", "Error occurred while creating account"
+					));
+			}
 		} catch(SQLException e) {
 			e.printStackTrace();
-			return ResponseEntity.internalServerError()
-				.body("Failed to create account: " + e.getMessage());
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body(Map.of(
+					"error", "Database error",
+					"message", e.getMessage(),
+					"details", "Error occurred while connecting to database"
+				));
 		}
 	}
 
@@ -70,22 +120,6 @@ public class CatanApplication {
 		try (Connection connection = dcm.getConnection()) {
 			AccountDAO accountDAO = new AccountDAO(connection);
 			Account account = accountDAO.updateUsername(id, data.get("username"));
-			if (account != null) {
-				return ResponseEntity.ok(account);
-			} else {
-				return ResponseEntity.notFound().build();
-			}
-		} catch(SQLException e) {
-			e.printStackTrace();
-			return ResponseEntity.internalServerError().build();
-		}
-	}
-
-	@PatchMapping("/api/account/{id}/password")
-	public ResponseEntity<Account> updatePassword(@PathVariable("id") long id, @RequestBody Map<String, String> data) {
-		try (Connection connection = dcm.getConnection()) {
-			AccountDAO accountDAO = new AccountDAO(connection);
-			Account account = accountDAO.updatePassword(id, data.get("password"));
 			if (account != null) {
 				return ResponseEntity.ok(account);
 			} else {
@@ -163,11 +197,10 @@ public class CatanApplication {
 	@PostMapping("/api/games")
 	public ResponseEntity<Object> createGame() {
 		try (Connection connection = dcm.getConnection()) {
-			System.out.println("DEBUG - Creating new game state");
 			GameState gameState = new GameState();
-			gameState.setTurnNumber(0); // start with turn 0
-			gameState.setBoardState(null); // will be set to {} in DAO
-			gameState.setRobberLocation(null); // will be set to {"hex": "desert"} in DAO
+			gameState.setTurnNumber(0);
+			gameState.setBoardState(null);
+			gameState.setRobberLocation(null);
 			gameState.setGameOver(false);
 			gameState.setBankBrick(19);
 			gameState.setBankOre(19);
@@ -180,23 +213,19 @@ public class CatanApplication {
 			gameState.setBankVictoryPoint(5);
 			gameState.setBankKnight(14);
 
-			System.out.println("DEBUG - Game state initialized with default values");
 			GameStateDAO dao = new GameStateDAO(connection);
 			
 			try {
 				GameState created = dao.create(gameState);
 				if (created == null) {
-					System.err.println("ERROR - Failed to create game state: result was null");
 					return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
 						.body(Map.of(
 							"error", "Failed to create game state",
 							"message", "Database operation completed but returned null"
 						));
 				}
-				System.out.println("DEBUG - Game created successfully with ID: " + created.getGameId());
 				return ResponseEntity.ok(created);
 			} catch (RuntimeException e) {
-				System.err.println("ERROR - Failed to create game state: " + e.getMessage());
 				e.printStackTrace();
 				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
 					.body(Map.of(
@@ -205,7 +234,6 @@ public class CatanApplication {
 					));
 			}
 		} catch (SQLException e) {
-			System.err.println("ERROR - Database connection error: " + e.getMessage());
 			e.printStackTrace();
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
 				.body(Map.of(
@@ -277,45 +305,36 @@ public class CatanApplication {
 			@PathVariable long gameId,
 			@PathVariable long accountId,
 			@RequestBody Map<String, Long> data) {
-		System.out.println("DEBUG - Received request to create player hand for gameId=" + gameId + ", accountId=" + accountId);
-		System.out.println("DEBUG - Request body: " + data);
 		
 		try (Connection connection = dcm.getConnection()) {
 			GameStateDAO gameStateDAO = new GameStateDAO(connection);
-			System.out.println("DEBUG - Checking if game exists with ID: " + gameId);
 			GameState gameState = gameStateDAO.findById(gameId);
 			if (gameState == null) {
 				System.err.println("ERROR - Game not found with ID: " + gameId);
 				return ResponseEntity.status(HttpStatus.NOT_FOUND)
 					.body(Map.of("error", "Game not found", "gameId", gameId));
 			}
-			System.out.println("DEBUG - Game found with ID: " + gameId + ", current turn: " + gameState.getTurnNumber());
 
 			AccountDAO accountDAO = new AccountDAO(connection);
-			System.out.println("DEBUG - Checking if account exists with ID: " + accountId);
 			Account account = accountDAO.findById(accountId);
 			if (account == null) {
 				System.err.println("ERROR - Account not found with ID: " + accountId);
 				return ResponseEntity.status(HttpStatus.NOT_FOUND)
 					.body(Map.of("error", "Account not found", "accountId", accountId));
 			}
-			System.out.println("DEBUG - Account found with ID: " + accountId);
 
 			PlayerStateDAO dao = new PlayerStateDAO(connection);
 			
-			System.out.println("DEBUG - Checking if player state already exists");
 			PlayerState existingState = dao.findPlayerState(accountId, gameId, gameState.getTurnNumber());
 			if (existingState != null) {
 				System.err.println("ERROR - Player state already exists for this combination");
 				return ResponseEntity.status(HttpStatus.CONFLICT)
 					.body(Map.of("error", "Player state already exists for this game, account, and turn"));
 			}
-			System.out.println("DEBUG - No existing player state found, proceeding with creation");
 
 			try {
 				PlayerState playerState = dao.createEmptyHand(accountId, gameId, gameState.getTurnNumber());
 				if (playerState != null) {
-					System.out.println("DEBUG - Successfully created player state");
 					return ResponseEntity.ok(playerState);
 				} else {
 					System.err.println("ERROR - Failed to create player state (null returned)");
@@ -368,22 +387,16 @@ public class CatanApplication {
 			@PathVariable long gameId,
 			@PathVariable long accountId,
 			@RequestBody Map<String, Object> data) {
-		System.out.println("DEBUG - Received resource gain request for gameId=" + gameId + ", accountId=" + accountId);
-		System.out.println("DEBUG - Request body: " + data);
 
 		try (Connection connection = dcm.getConnection()) {
-			// First verify the game exists and get its current turn
 			GameStateDAO gameStateDAO = new GameStateDAO(connection);
-			System.out.println("DEBUG - Checking if game exists with ID: " + gameId);
 			GameState gameState = gameStateDAO.findById(gameId);
 			if (gameState == null) {
 				System.err.println("ERROR - Game not found with ID: " + gameId);
 				return ResponseEntity.status(HttpStatus.NOT_FOUND)
 					.body(Map.of("error", "Game not found", "gameId", gameId));
 			}
-			System.out.println("DEBUG - Game found with ID: " + gameId + ", current turn: " + gameState.getTurnNumber());
 
-			// Verify all required parameters are present
 			if (!data.containsKey("resourceType") || 
 				!data.containsKey("numSettlements") || !data.containsKey("numCities")) {
 				System.err.println("ERROR - Missing required parameters in request body");
@@ -393,23 +406,16 @@ public class CatanApplication {
 
 			PlayerStateDAO dao = new PlayerStateDAO(connection);
 			try {
-				System.out.println("DEBUG - Attempting to update resources with parameters:");
-				System.out.println("DEBUG - Using current turn number: " + gameState.getTurnNumber());
-				System.out.println("DEBUG - resourceType: " + data.get("resourceType"));
-				System.out.println("DEBUG - numSettlements: " + data.get("numSettlements"));
-				System.out.println("DEBUG - numCities: " + data.get("numCities"));
-
 				PlayerState updated = dao.updateOnBoardGain(
 					accountId,
 					gameId,
-					gameState.getTurnNumber(), // Use the game's current turn number
+					gameState.getTurnNumber(),
 					data.get("resourceType").toString(),
 					Integer.parseInt(data.get("numSettlements").toString()),
 					Integer.parseInt(data.get("numCities").toString())
 				);
 
 				if (updated != null) {
-					System.out.println("DEBUG - Successfully updated player resources");
 					return ResponseEntity.ok(updated);
 				} else {
 					System.err.println("ERROR - Player state not found for the given combination");
@@ -477,6 +483,27 @@ public class CatanApplication {
 			e.printStackTrace();
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
 				.body(Map.of("deleted", false));
+		}
+	}
+
+	@GetMapping("/api/accounts")
+	@CrossOrigin(origins = {"http://localhost:3000"}, allowCredentials = "true")
+	public ResponseEntity<?> getAllAccounts() {
+		try (Connection connection = dcm.getConnection()) {
+			AccountDAO accountDAO = new AccountDAO(connection);
+			List<Account> accounts = accountDAO.findAll();
+			if (accounts.isEmpty()) {
+				return ResponseEntity.ok(List.of());
+			}
+			return ResponseEntity.ok(accounts);
+		} catch(SQLException e) {
+			e.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body(Map.of(
+					"error", "Database error",
+					"message", e.getMessage(),
+					"details", "Error occurred while fetching accounts"
+				));
 		}
 	}
 

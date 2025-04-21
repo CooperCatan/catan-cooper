@@ -20,13 +20,11 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
     }
 
     public PlayerState findPlayerState(long accountId, long gameId, long turnNumber) {
-        System.out.println("DEBUG - Finding player state for accountId=" + accountId + ", gameId=" + gameId + ", turnNumber=" + turnNumber);
         String sql = "SELECT * FROM player_state WHERE account_id = ? AND game_id = ? AND turn_number = ?";
         try (PreparedStatement statement = this.connection.prepareStatement(sql)) {
             statement.setLong(1, accountId);
             statement.setLong(2, gameId);
             statement.setLong(3, turnNumber);
-            System.out.println("DEBUG - Executing SQL: " + sql + " with params: [" + accountId + ", " + gameId + ", " + turnNumber + "]");
             ResultSet rs = statement.executeQuery();
             if (rs.next()) {
                 PlayerState state = new PlayerState();
@@ -49,22 +47,16 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
                 state.setNumLongestContinuousRoad(rs.getLong("num_longest_continuous_road"));
                 state.setLargestArmy(rs.getBoolean("largest_army"));
                 state.setLongestRoad(rs.getBoolean("longest_road"));
-                System.out.println("DEBUG - Found existing player state");
                 return state;
             }
-            System.out.println("DEBUG - No player state found");
             return null;
         } catch (SQLException e) {
-            System.err.println("ERROR - Failed to find player state: " + e.getMessage());
-            System.err.println("ERROR - SQL State: " + e.getSQLState());
-            System.err.println("ERROR - Error Code: " + e.getErrorCode());
             e.printStackTrace();
             throw new RuntimeException(e);
         }
     }
 
     public PlayerState createEmptyHand(long accountId, long gameId, long turnNumber) {
-        System.out.println("DEBUG - Creating empty hand for accountId=" + accountId + ", gameId=" + gameId + ", turnNumber=" + turnNumber);
         String sql = "INSERT INTO player_state (account_id, game_id, turn_number, " +
                     "hand_ore, hand_sheep, hand_wheat, hand_wood, hand_brick, " +
                     "hand_victory_point, hand_knight, hand_monopoly, hand_year_of_plenty, " +
@@ -75,19 +67,13 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
             statement.setLong(1, accountId);
             statement.setLong(2, gameId);
             statement.setLong(3, turnNumber);
-            System.out.println("DEBUG - Executing SQL: " + sql + " with params: [" + accountId + ", " + gameId + ", " + turnNumber + "]");
             int rowsAffected = statement.executeUpdate();
-            System.out.println("DEBUG - Insert affected " + rowsAffected + " rows");
             if (rowsAffected > 0) {
                 return findPlayerState(accountId, gameId, turnNumber);
             } else {
-                System.err.println("ERROR - Insert statement did not affect any rows");
                 return null;
             }
         } catch (SQLException e) {
-            System.err.println("ERROR - Failed to create empty hand: " + e.getMessage());
-            System.err.println("ERROR - SQL State: " + e.getSQLState());
-            System.err.println("ERROR - Error Code: " + e.getErrorCode());
             e.printStackTrace();
             throw new RuntimeException(e);
         }
@@ -109,23 +95,14 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
 
     public PlayerState updateOnBoardGain(long accountId, long gameId, long turnNumber, 
                                        String resourceType, int numSettlements, int numCities) {
-        System.out.println("DEBUG - Updating board gain for accountId=" + accountId + 
-                         ", gameId=" + gameId + ", turnNumber=" + turnNumber);
-        System.out.println("DEBUG - Resource: " + resourceType + 
-                         ", Settlements: " + numSettlements + ", Cities: " + numCities);
 
-        // First check if the player state exists
         PlayerState currentState = findPlayerState(accountId, gameId, turnNumber);
         if (currentState == null) {
-            System.err.println("ERROR - No player state found for accountId=" + accountId + 
-                             ", gameId=" + gameId + ", turnNumber=" + turnNumber);
             return null;
         }
-        System.out.println("DEBUG - Found existing player state");
         
-        // In Catan, settlements get 1 resource and cities get 2 resources
+        // In catan, settlements get 1 resource and cities get 2 resources
         int totalResources = numSettlements + (numCities * 2);
-        System.out.println("DEBUG - Calculating total resources: " + totalResources);
         
         String sql = "UPDATE player_state SET hand_" + resourceType.toLowerCase() + 
                     " = hand_" + resourceType.toLowerCase() + " + ? " +
@@ -137,23 +114,14 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
             statement.setLong(3, gameId);
             statement.setLong(4, turnNumber);
             
-            System.out.println("DEBUG - Executing SQL: " + sql);
-            System.out.println("DEBUG - Parameters: [" + totalResources + ", " + 
-                             accountId + ", " + gameId + ", " + turnNumber + "]");
-            
             int rowsAffected = statement.executeUpdate();
-            System.out.println("DEBUG - Rows affected: " + rowsAffected);
             
             if (rowsAffected > 0) {
                 return findPlayerState(accountId, gameId, turnNumber);
             } else {
-                System.err.println("ERROR - Update did not affect any rows");
                 return null;
             }
         } catch (SQLException e) {
-            System.err.println("ERROR - SQL error while updating resources: " + e.getMessage());
-            System.err.println("ERROR - SQL State: " + e.getSQLState());
-            System.err.println("ERROR - Error Code: " + e.getErrorCode());
             e.printStackTrace();
             throw new RuntimeException(e);
         }
