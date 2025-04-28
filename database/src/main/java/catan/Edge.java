@@ -37,4 +37,21 @@ class Edge {
             this.playerId = playerId;
         }
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        //If it's not an edge obviously false
+        if (!(o instanceof Edge edge)) {
+            return false;
+        }
+        //If the source an destination is the same as the destination and source, the edge is the same
+        return (vertex1Id == edge.vertex1Id && vertex2Id == edge.vertex2Id) || (vertex1Id == edge.vertex2Id && vertex2Id == edge.vertex1Id);
+    }
+
+    @Override
+    public int hashCode() {
+        //Fixing hashCode for the edge items
+        return Math.min(vertex1Id, vertex2Id) * 31 + Math.max(vertex1Id, vertex2Id);
+    }
 }
