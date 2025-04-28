@@ -342,7 +342,7 @@ public class GameState implements DataTransferObject {
                         }
                     }
                     //If the conditionals are valid, update the game state
-                    if(noneAdjacent && validRoad && vex.setBuilding(1, accountId)) {
+                    if(noneAdjacent && validRoad && vex.getBuildingType() == 0 && vex.setBuilding(1, accountId)) {
                         this.jsonHexes = serializeHex(hexes, gson);
                         this.jsonVertices = serializeVertex(hexes, gson);
                         this.jsonEdges = serializeEdges(hexes, gson);
@@ -355,8 +355,89 @@ public class GameState implements DataTransferObject {
         return 0;
     }
 
+    public int placeRoad(int v1, int v2, Long accountId) {
+        Gson gson = new Gson();
+        List<Hex> hexes = this.deserialize(this.jsonHexes, this.jsonVertices, this.jsonEdges, gson);
+        Edge targetEdge = null;
+        Vertex vertex1 = null;
+        Vertex vertex2 = null;
+
+        //Find the vertices you care about
+        outerLoop:
+        for(Hex hex : hexes) {
+            for(Vertex vertex : hex.getVertices()) {
+                if(vertex.getId() == v1) {
+                    vertex1 = vertex;
+                }
+                if(vertex.getId() == v2) {
+                    vertex2 = vertex;
+                }
+                if(vertex1 != null && vertex2 != null) {
+                    break outerLoop;
+                }
+            }
+        }
+
+        //Find edge that we want to build on
+        for(Edge edge : vertex1.getAdjacentEdges()) {
+            if((edge.getVertex1() == vertexId1 && edge.getVertex2() == vertexId2) || (edge.getVertex1() == vertexId2 && edge.getVertex2() == vertexId1)) {
+                targetEdge = edge;
+                break;
+            }
+        }
+
+        //Sanity check for unconnected vertices
+        if(targetEdge == null) {
+            return 0;
+        }
+
+        //Road exists, can't be placed
+        boolean validRoad = false;
+        if(targetEdge.hasRoad()) {
+            return 0;
+        } else {
+            validRoad = true;
+        }
+
+        boolean hasConnection = false;
+        //Check if player has a building at either vertex, this helps with first turn stuff
+        if(vertex1.getPlayerId() == accountId || vertex2.getPlayerId() == accountId) {
+            hasConnection = true;
+        }
+        //Check if either vertex has a road connecting to them
+        if(!hasConnection) {
+            for(Edge edge : vertex1.getAdjacentEdges()) {
+                if(edge.hasRoad() && edge.getPlayerId() == accountId) {
+                    hasConnection = true;
+                    break;
+                }
+            }
+            if(!hasConnection) {
+                for(Edge edge : vertex2.getAdjacentEdges()) {
+                    if(edge.hasRoad() && edge.getPlayerId() == accountId) {
+                        hasConnection = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        //Invalid Road placement, can't be conncected to road
+        if(!hasConnection) {
+            return 0;
+        }
+
+        //Place the road
+        targetEdge.setRoad(true);
+        targetEdge.setPlayerId(accountId);
+        this.jsonHexes = serializeHex(hexes, gson);
+        this.jsonVertices = serializeVertex(hexes, gson);
+        this.jsonEdges = serializeEdges(hexes, gson);
+        return 1;
+    }
+
     public int rollDice() {
-        random = new Random();
+        Random random = new Random();
         int roll = (int) (Math.random() * 6) + 1 + (int) (Math.random() * 6) + 1;
         //Unpack the JSON gameState to set up the hex list
         Gson gson = new Gson();
@@ -377,11 +458,37 @@ public class GameState implements DataTransferObject {
                         }
                         //Since buildingType is 1 to 1 with the amount of resources you get, just add the building type
                         switch(hex.getResource()) {
-                            case "brick" -> playerState.setBrick(playerState.getBrick() + vex.getBuildingType());
-                            case "wood" -> playerState.setWood(playerState.getWood() + vex.getBuildingType());
-                            case "wheat" -> playerState.setWheat(playerState.getWheat() + vex.getBuildingType());
-                            case "ore" -> playerState.setOre(playerState.getOre() + vex.getBuildingType());
-                            case "sheep" -> playerState.setSheep(playerState.getSheep() + vex.getBuildingType());
+                            case "brick" -> {
+                                int amount = vex.getBuildingType();
+                                if (bankBrick >= amount) {
+                                    playerState.setBrick(playerState.getBrick() + amount);
+                                    bankBrick -= amount;
+                                }
+                            }
+                            case "wood" -> {
+                                int amount = vex.getBuildingType();
+                                if (bankWood >= amount) {
+                                    playerState.setWood(playerState.getWood() + amount);
+                                    bankWood -= amount;
+                                }
+                            case "wheat" -> {
+                                int amount = vex.getBuildingType();
+                                if (bankWheat >= amount) {
+                                    playerState.setWheat(playerState.getWheat() + amount);
+                                    bankWheat -= amount;
+                                }
+                            case "ore" -> {
+                                int amount = vex.getBuildingType();
+                                if (bankOre >= amount) {
+                                    playerState.setOre(playerState.getOre() + amount);
+                                    bankOre -= amount;
+                                }
+                            case "sheep" -> {
+                                int amount = vex.getBuildingType();
+                                if (bankSheep >= amount) {
+                                    playerState.setSheep(playerState.getSheep() + amount);
+                                    bankSheep -= amount;
+                                }
                         }
                         playerStateDAO.update(playerState);
                     }

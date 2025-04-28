@@ -91,6 +91,7 @@ public class GameAction implements DataTransferObject {
                         switch (card) {
                             case 1:
                                 playerState.setKnight(playerState.getKnight() + 1);
+                                gameState.setKnight();
                                 break;
                             case 2:
                                 playerState.setMonopoly(playerState.getMonopoly() + 1);
