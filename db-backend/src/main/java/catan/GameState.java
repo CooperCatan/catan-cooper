@@ -26,6 +26,10 @@ public class GameState implements DataTransferObject {
     private long bankKnight;
     private Connection connection;
     private PlayerStateDAO playerStateDAO;
+    private boolean isSetupPhase = true; // period where players place 1 settlement and road 
+    private int setupPhaseRound = 0;  // 0 for first round, 1 for second round
+    private List<Long> playerOrder = new ArrayList<>(); 
+    private int currentPlayerIndex = 0; 
 
 
     public GameState() {
@@ -532,5 +536,156 @@ public class GameState implements DataTransferObject {
 
     public String getJsonEdges() {
         return jsonEdges;
+    }
+
+    public void addPlayer(Long playerId) {
+        if (!playerOrder.contains(playerId)) {
+            playerOrder.add(playerId);
+        }
+    }
+
+    public boolean isSetupPhase() {
+        return isSetupPhase;
+    }
+
+    public boolean placeInitialSettlement(int v, Long accountId) {
+        // During setup phase, players don't need resources to build settlement
+        Gson gson = new Gson();
+        List<Hex> hexes = deserialize(jsonHexes, jsonVertices, jsonEdges, gson);
+        
+        // Find the vertex
+        Vertex vertex = null;
+        for (Hex hex : hexes) {
+            for (Vertex vert : hex.getVertices()) {
+                if (vert.getId() == v) {
+                    vertex = vert;
+                    break;
+                }
+            }
+            if (vertex != null) break;
+        }
+        
+        if (vertex == null) {
+            return false;
+        }
+
+        // check if this is a valid placement
+        // 1. no building exists here
+        if (vertex.getBuildingType() != 0) {
+            return false;
+        }
+
+        // 2. no adjacent buildings (distance rule in catan)
+        for (Edge edge : vertex.getAdjacentEdges()) {
+            Vertex otherVertex = null;
+            for (Hex hex : hexes) {
+                for (Vertex vert : hex.getVertices()) {
+                    if (vert.getId() == (edge.getVertex1() == vertex.getId() ? edge.getVertex2() : edge.getVertex1())) {
+                        otherVertex = vert;
+                        break;
+                    }
+                }
+                if (otherVertex != null) break;
+            }
+            if (otherVertex != null && otherVertex.getBuildingType() != 0) {
+                return false;
+            }
+        }
+
+        // place the settlement
+        vertex.setBuilding(1, accountId);
+        vertex.setPlayerId(accountId);
+
+        // update serialized object 
+        this.jsonHexes = serializeHex(hexes, gson);
+        this.jsonVertices = serializeVertex(hexes, gson);
+        this.jsonEdges = serializeEdges(hexes, gson);
+
+        return true;
+    }
+
+    public boolean placeInitialRoad(int v1, int v2, Long accountId) {
+        // during setup phase, players don't need resources to build road 
+        Gson gson = new Gson();
+        List<Hex> hexes = deserialize(jsonHexes, jsonVertices, jsonEdges, gson);
+        
+        // find the vertices and edge
+        Vertex vertex1 = null, vertex2 = null;
+        Edge targetEdge = null;
+        
+        for (Hex hex : hexes) {
+            for (Vertex vert : hex.getVertices()) {
+                if (vert.getId() == v1) vertex1 = vert;
+                if (vert.getId() == v2) vertex2 = vert;
+                if (vertex1 != null && vertex2 != null) break;
+            }
+            if (vertex1 != null && vertex2 != null) break;
+        }
+        
+        if (vertex1 == null || vertex2 == null) {
+            return false;
+        }
+
+        // find the edge between these vertices
+        for (Edge edge : vertex1.getAdjacentEdges()) {
+            if ((edge.getVertex1() == v1 && edge.getVertex2() == v2) ||
+                (edge.getVertex1() == v2 && edge.getVertex2() == v1)) {
+                targetEdge = edge;
+                break;
+            }
+        }
+
+        if (targetEdge == null) {
+            return false;
+        }
+
+        // 1. check if road already exists
+        if (targetEdge.hasRoad()) {
+            return false;
+        }
+
+        // 2. check if the road is connected to the player's settlement
+        boolean isConnected = (vertex1.getPlayerId() == accountId || vertex2.getPlayerId() == accountId);
+        if (!isConnected) {
+            return false;
+        }
+
+        // place the road
+        targetEdge.setRoad(true);
+        targetEdge.setPlayerId(accountId);
+
+        // update the serialized state
+        this.jsonHexes = serializeHex(hexes, gson);
+        this.jsonVertices = serializeVertex(hexes, gson);
+        this.jsonEdges = serializeEdges(hexes, gson);
+
+        // move to next player or phase
+        advanceSetupPhase();
+
+        return true;
+    }
+
+    private void advanceSetupPhase() {
+        currentPlayerIndex++;
+        
+        // first round (forward direction)
+        if (setupPhaseRound == 0) {
+            if (currentPlayerIndex >= playerOrder.size()) {
+                setupPhaseRound = 1;
+                currentPlayerIndex = playerOrder.size() - 1;  // Start from last player
+            }
+        }
+        // Second round (backward)
+        else {
+            if (currentPlayerIndex < 0) {
+                isSetupPhase = false;  // end setup phase
+                currentPlayerIndex = 0;  // start normal game with first player
+                turnNumber = 1; 
+            }
+        }
+    }
+
+    public Long getCurrentPlayer() {
+        return playerOrder.get(currentPlayerIndex);
     }
 }
