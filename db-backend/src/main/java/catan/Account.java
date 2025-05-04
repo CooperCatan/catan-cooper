@@ -5,6 +5,8 @@ import catan.util.DataTransferObject;
 public class Account implements DataTransferObject {
 
     private long accountId;
+
+    private long accountId;
     private String username;
     private String email;
     private long totalGames;
@@ -62,9 +64,11 @@ public class Account implements DataTransferObject {
     }
 
     public long getElo() {
+    public long getElo() {
         return elo;
     }
 
+    public void setElo(long elo) {
     public void setElo(long elo) {
         this.elo = elo;
     }
@@ -72,6 +76,7 @@ public class Account implements DataTransferObject {
     @Override
     public String toString() {
         return "Account{" +
+                "accountId=" + accountId +
                 "accountId=" + accountId +
                 ", username='" + username + '\'' +
                 ", email='" + email + '\'' +
