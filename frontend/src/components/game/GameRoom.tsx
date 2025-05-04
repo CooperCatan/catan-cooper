@@ -45,12 +45,12 @@ const GameRoom: React.FC = () => {
       return;
     }
 
-    // For local testing, make it your turn (Player 3) after countdown
+    // for local testing, make it your turn (Player 3) after countdown
     const timer = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          setCurrentTurn(3); // Start with Player 3 (current user)
+          setCurrentTurn(3); // start with Player 3 (current user)
           return 0;
         }
         return prev - 1;
@@ -106,13 +106,15 @@ const GameRoom: React.FC = () => {
     return () => clearInterval(timer);
   }, [auth, navigate]);
 
+  // change for real implementatiom
+
   const handleTurnComplete = () => {
-    // Rotate to next player's turn
+    // rotate to next player's turn
     setCurrentTurn(prev => {
-      if (prev === 3) return 1; // After your turn (3), go to Player 1
+      if (prev === 3) return 1; // after your turn (3), go to Player 1
       if (prev === 1) return 2;
       if (prev === 2) return 3;
-      return 3; // Default to your turn if something goes wrong
+      return 3; // default to your turn if something goes wrong
     });
   };
 
