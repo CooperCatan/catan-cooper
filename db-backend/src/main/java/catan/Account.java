@@ -6,21 +6,18 @@ public class Account implements DataTransferObject {
 
     private long accountId;
     private String username;
-    private String password;
+    private String email;
     private long totalGames;
     private long totalWins;
     private long totalLosses;
     private long elo;
 
+    @Override
     public long getId() {
         return accountId;
     }
 
-    public long getAccountId() {
-        return accountId;
-    }
-
-    public void setAccountId(long accountId) {
+    public void setId(long accountId) {
         this.accountId = accountId;
     }
 
@@ -32,12 +29,12 @@ public class Account implements DataTransferObject {
         this.username = username;
     }
 
-    public String getPassword() {
-        return password;
+    public String getEmail() {
+        return email;
     }
 
-    public void setPassword(String password) {
-        this.password = password;
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public long getTotalGames() {
@@ -77,7 +74,7 @@ public class Account implements DataTransferObject {
         return "Account{" +
                 "accountId=" + accountId +
                 ", username='" + username + '\'' +
-                ", password='" + password + '\'' +
+                ", email='" + email + '\'' +
                 ", totalGames=" + totalGames +
                 ", totalWins=" + totalWins + 
                 ", totalLosses=" + totalLosses +
