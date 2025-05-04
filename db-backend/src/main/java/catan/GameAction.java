@@ -144,7 +144,6 @@ public class GameAction implements DataTransferObject {
                 //We have to return here because the increment in turn increases playerState values.
                 //If we update playerState here, one of the players won't get any resources
                 return;
-                break;
             default:
                 System.err.println("Invalid action: " + action);
                 break;
