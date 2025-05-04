@@ -1,41 +1,33 @@
-import React, { type ReactElement } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React from 'react';
+import { Link } from 'react-router-dom';
 
-const Navbar = (): ReactElement => {
-  const navigate = useNavigate();
-
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const navigateToSignIn = () => {
-    navigate('/signin');
-  };
-
+const Navbar: React.FC = () => {
   return (
-    <header className="fixed top-0 w-full bg-white/80 backdrop-blur-md border-b z-50">
-      <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-        <div className="text-2xl font-bold text-catan-brick cursor-pointer" onClick={scrollToTop}>
-          CooperCatan
+    <nav className="bg-white shadow-sm fixed w-full z-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          <div className="flex">
+            <Link to="/" className="flex items-center">
+              <span className="text-xl font-bold text-catan-brick">CatanCooper</span>
+            </Link>
+          </div>
+          <div className="flex items-center space-x-4">
+            <Link
+              to="/signin"
+              className="px-4 py-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+            >
+              Sign In
+            </Link>
+            <Link
+              to="/signup"
+              className="px-4 py-2 bg-catan-brick text-white rounded-lg hover:bg-catan-brick/90 transition-colors"
+            >
+              Sign Up
+            </Link>
+          </div>
         </div>
-        <nav className="flex gap-4">
-          <button 
-            onClick={scrollToTop}
-            className="px-4 py-2 text-catan-brick hover:bg-catan-brick/10 rounded-lg transition-colors"
-            type="button"
-          >
-            Home
-          </button>
-          <button 
-            onClick={navigateToSignIn}
-            className="px-4 py-2 bg-catan-brick text-white hover:bg-catan-brick/90 rounded-lg transition-colors"
-            type="button"
-          >
-            Sign In
-          </button>
-        </nav>
       </div>
-    </header>
+    </nav>
   );
 };
 

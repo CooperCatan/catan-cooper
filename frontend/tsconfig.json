@@ -22,6 +22,6 @@
     },
     "types": ["react", "react-dom", "node", "jest", "web-vitals", "react-router-dom"]
   },
-  "include": ["src/**/*"],
+  "include": ["src"],
   "exclude": ["node_modules"]
 }

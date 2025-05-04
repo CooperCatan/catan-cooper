@@ -12,13 +12,13 @@ const features = [
     icon: '📜'
   },
   {
-    title: 'Ranked Matches',
-    description: 'Compete in ranked games and climb the global leaderboard.',
+    title: 'ELO Rating',
+    description: 'Compete in games and climb the global leaderboard.',
     icon: '🏆'
   },
   {
     title: 'Custom Games',
-    description: 'Create private games with custom rules and invite your friends.',
+    description: 'Create private lobbies with and invite your friends.',
     icon: '⚙️'
   }
 ];
@@ -32,7 +32,7 @@ const FeaturesSection = () => {
             The Ultimate Digital Catan Experience
           </h2>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Everything you love about Catan, enhanced with modern features for online play.
+            Everything you love about Catan, with features for online play.
           </p>
         </div>
         

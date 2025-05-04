@@ -1,5 +1,7 @@
 import React from 'react';
 
+// reword lander copy to be more compelling and less slop-like
+
 const AboutSection = () => {
   return (
     <section className="py-16 bg-gradient-to-br from-catan-brick/5 to-catan-wood/5">
@@ -9,16 +11,15 @@ const AboutSection = () => {
             <h2 className="text-3xl font-bold text-gray-900 mb-6">
               About CooperCatan
             </h2>
-            <div className="space-y-4 text-gray-600">
+            <div className="space-y-4 text-gray-600"> 
               <p>
-                CooperCatan brings the beloved Settlers of Catan board game into the digital age,
-                offering a seamless online experience while maintaining the strategic depth and
+                CooperCatan brings Settlers of Catan into a digital format,maintaining the strategic depth and
                 social interaction that made the original game a classic.
               </p>
               <p>
                 Whether you're a seasoned Catan player or new to the game, CooperCatan
                 provides the perfect platform to build, trade, and compete with players
-                from around the world.
+                from around the world to satisfy your catan cravings.
               </p>
             </div>
           </div>

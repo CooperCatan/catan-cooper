@@ -101,7 +101,7 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
             return null;
         }
         
-        // In catan, settlements get 1 resource and cities get 2 resources
+        // settlements get 1 resource and cities get 2 resources
         int totalResources = numSettlements + (numCities * 2);
         
         String sql = "UPDATE player_state SET hand_" + resourceType.toLowerCase() + 
