@@ -26,7 +26,7 @@ In congruence with the requirements for the final project set forth by Professor
 
 1.  *2.01. Provide service in their areas of competence, being honest and forthright about any limitations of their experience and education.*. 
 
-The implementation of the longest-road algorithm with the restriction that there are no cycles is an NP-hard problem that requires a depth-first search and is an algorithm that all group members were forthright in their lack of experience in implementing. As a result, the requirements of the project were eventually relaxed to exclude the longest-road objective in Catan and instead count the number of roads placed by a player with our supervising authority within the semester's scheduling constraints. 
+The implementation of the longest-road algorithm with the restriction that there are no cycles is an NP-hard problem that requires a depth-first search and is an algorithm that all group members were forthcoming in their lack of experience in implementing. As a result, the requirements of the project were eventually relaxed to exclude the longest-road objective in Catan and instead count the number of roads placed by a player with our supervising authority within the semester's scheduling constraints. 
 
 2. *2.06. Identify, document, collect evidence and report to the client or the employer promptly if, in their opinion, a project is likely to fail, to prove too expensive, to violate intellectual property law, or otherwise to be problematic.*
 
