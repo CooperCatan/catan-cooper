@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface HexTile {
   id: number;
@@ -17,10 +17,36 @@ interface Port {
   rotation: number;
 }
 
+interface Vertex {
+  id: number;
+  x: number;
+  y: number;
+  building?: {
+    type: 'settlement' | 'city';
+    playerId: number;
+  };
+}
+
+interface Edge {
+  id: string;
+  v1: number;
+  v2: number;
+  road?: {
+    playerId: number;
+  };
+}
+
+interface GameBoardProps {
+  gameId: number;
+  accountId: number;
+  isSetupPhase: boolean;
+  isCurrentTurn: boolean;
+}
+
 const TILE_SIZE = 60;
 const HEX_HEIGHT = TILE_SIZE * 2;
 const HEX_WIDTH = Math.sqrt(3) * TILE_SIZE;
-const ROBBER_SIZE = TILE_SIZE * 0.8;
+const ROBBER_SIZE = TILE_SIZE;
 
 // hex bg scaling factors
 const RESOURCE_SCALE = {
@@ -83,7 +109,131 @@ const PORT_COLORS = {
   any: '#95a5a6',
 };
 
-const GameBoard: React.FC = () => {
+const GameBoard: React.FC<GameBoardProps> = ({ gameId, accountId, isSetupPhase, isCurrentTurn }) => {
+  const [vertices, setVertices] = useState<Vertex[]>([]);
+  const [edges, setEdges] = useState<Edge[]>([]);
+  const [selectedVertex, setSelectedVertex] = useState<number | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+  const [placementMode, setPlacementMode] = useState<'settlement' | 'road' | null>(null);
+
+  // calculate vertex positions based on hex grid
+  useEffect(() => {
+    const calculatedVertices: Vertex[] = [];
+    // calculate vertex positions for each hex corner
+    TILES.forEach(tile => {
+      const centerX = tile.x * HEX_WIDTH + HEX_WIDTH * 2;
+      const centerY = tile.y * HEX_HEIGHT * 0.75 + HEX_HEIGHT;
+      
+      for (let i = 0; i < 6; i++) {
+        const angle = (60 * i - 30) * Math.PI / 180;
+        const x = centerX + TILE_SIZE * Math.cos(angle);
+        const y = centerY + TILE_SIZE * Math.sin(angle);
+        
+        // add vertex if it doesn't exist (check for nearby vertices to avoid duplicates)
+        if (!calculatedVertices.some(v => 
+          Math.abs(v.x - x) < 5 && Math.abs(v.y - y) < 5
+        )) {
+          calculatedVertices.push({
+            id: calculatedVertices.length + 1,
+            x,
+            y
+          });
+        }
+      }
+    });
+    setVertices(calculatedVertices);
+
+    // calculate edges between vertices
+    const calculatedEdges: Edge[] = [];
+    calculatedVertices.forEach(v1 => {
+      calculatedVertices.forEach(v2 => {
+        // create edge if vertices are close enough to be connected
+        const distance = Math.sqrt(
+          Math.pow(v1.x - v2.x, 2) + Math.pow(v1.y - v2.y, 2)
+        );
+        if (distance > 0 && distance <= TILE_SIZE * 1.2) {
+          const edgeId = `${Math.min(v1.id, v2.id)}-${Math.max(v1.id, v2.id)}`;
+          if (!calculatedEdges.some(e => e.id === edgeId)) {
+            calculatedEdges.push({
+              id: edgeId,
+              v1: v1.id,
+              v2: v2.id
+            });
+          }
+        }
+      });
+    });
+    setEdges(calculatedEdges);
+  }, []);
+
+  const handleVertexClick = async (vertexId: number) => {
+    if (!isSetupPhase || !isCurrentTurn) return;
+    
+    try {
+      const response = await fetch(`http://localhost:8080/api/games/${gameId}/setup-action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          accountId,
+          action: 'SETTLEMENT',
+          v1: vertexId,
+          v2: 0 // not used for settlements
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to place settlement');
+      }
+
+      const result = await response.json();
+      // update the game state with the new settlement
+      setVertices(vertices.map(v => 
+        v.id === vertexId 
+          ? { ...v, building: { type: 'settlement', playerId: accountId } }
+          : v
+      ));
+      setPlacementMode('road');
+    } catch (error) {
+      console.error('Error placing settlement:', error);
+    }
+  };
+
+  const handleEdgeClick = async (edge: Edge) => {
+    if (!isSetupPhase || !isCurrentTurn || placementMode !== 'road') return;
+
+    try {
+      const response = await fetch(`http://localhost:8080/api/games/${gameId}/setup-action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          accountId,
+          action: 'ROAD',
+          v1: edge.v1,
+          v2: edge.v2
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to place road');
+      }
+
+      const result = await response.json();
+      // update the game state with the new road
+      setEdges(edges.map(e => 
+        e.id === edge.id 
+          ? { ...e, road: { playerId: accountId } }
+          : e
+      ));
+      setPlacementMode(null);
+    } catch (error) {
+      console.error('Error placing road:', error);
+    }
+  };
+
   const getHexPoints = (x: number, y: number): string => {
     const centerX = x * HEX_WIDTH + HEX_WIDTH * 2;
     const centerY = y * HEX_HEIGHT * 0.75 + HEX_HEIGHT;
@@ -217,9 +367,69 @@ const GameBoard: React.FC = () => {
             {renderRobber(tile)}
           </g>
         ))}
+
+        {/* render edges (roads) */}
+        {edges.map(edge => {
+          const v1 = vertices.find(v => v.id === edge.v1);
+          const v2 = vertices.find(v => v.id === edge.v2);
+          if (!v1 || !v2) return null;
+
+          return (
+            <line
+              key={edge.id}
+              x1={v1.x}
+              y1={v1.y}
+              x2={v2.x}
+              y2={v2.y}
+              stroke={edge.road ? getPlayerColor(edge.road.playerId) : '#2c3e50'}
+              strokeWidth={edge.road ? 6 : 2}
+              strokeLinecap="round"
+              className={isSetupPhase && isCurrentTurn && placementMode === 'road' 
+                ? 'cursor-pointer hover:stroke-yellow-400' 
+                : ''}
+              onClick={() => handleEdgeClick(edge)}
+            />
+          );
+        })}
+
+        {/* render vertices (settlements/cities) */}
+        {vertices.map(vertex => (
+          <g key={vertex.id}>
+            <circle
+              cx={vertex.x}
+              cy={vertex.y}
+              r={vertex.building ? 12 : 8}
+              fill={vertex.building 
+                ? getPlayerColor(vertex.building.playerId)
+                : 'white'}
+              stroke="#2c3e50"
+              strokeWidth="2"
+              className={isSetupPhase && isCurrentTurn && !placementMode
+                ? 'cursor-pointer hover:fill-yellow-400'
+                : ''}
+              onClick={() => handleVertexClick(vertex.id)}
+            />
+            {vertex.building?.type === 'city' && (
+              <circle
+                cx={vertex.x}
+                cy={vertex.y}
+                r={6}
+                fill="white"
+                stroke="#2c3e50"
+                strokeWidth="1"
+              />
+            )}
+          </g>
+        ))}
       </svg>
     </div>
   );
+};
+
+// helper function to get player colors
+const getPlayerColor = (playerId: number): string => {
+  const colors = ['#e74c3c', '#2ecc71', '#3498db', '#f1c40f'];
+  return colors[playerId % colors.length];
 };
 
 export default GameBoard; 
