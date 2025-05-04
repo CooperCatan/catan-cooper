@@ -163,4 +163,8 @@ public class PlayerState implements DataTransferObject {
         this.setSheep(this.getSheep() + 1);
         return;
     }
-} 
+
+    public int useCard() {
+        return 1;
+    }
+}

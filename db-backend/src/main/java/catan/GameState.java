@@ -315,7 +315,7 @@ public class GameState implements DataTransferObject {
         return;
     }
 
-    public int placeCity(int v, Long accountId) {
+    public boolean placeCity(int v, Long accountId) {
         Gson gson = new Gson();
         List<Hex> hexes = this.deserialize(this.jsonHexes, this.jsonVertices, this.jsonEdges, gson);
         //Look for the right vertex in the deserialized board
@@ -326,16 +326,16 @@ public class GameState implements DataTransferObject {
                         this.jsonHexes = serializeHex(hexes, gson);
                         this.jsonVertices = serializeVertex(hexes, gson);
                         this.jsonEdges = serializeEdges(hexes, gson);
-                        return 1;
+                        return true;
                     }
-                    return 0;
+                    return false;
                 }
             }
         }
-        return 0;
+        return false;
     }
 
-    public int placeSettlement(int v, Long accountId) {
+    public boolean placeSettlement(int v, Long accountId) {
         Gson gson = new Gson();
         List<Hex> hexes = this.deserialize(this.jsonHexes, this.jsonVertices, this.jsonEdges, gson);
         //Look for the right vertex in the deserialized board
@@ -349,7 +349,7 @@ public class GameState implements DataTransferObject {
                         }
                     }
                     if(!validRoad) {
-                        return 0;
+                        return false;
                     }
                     boolean noneAdjacent = true;
                     for(int i = 0; i < vex.getAdjacentEdgeIds().size(); i++) {
@@ -366,16 +366,16 @@ public class GameState implements DataTransferObject {
                         this.jsonHexes = serializeHex(hexes, gson);
                         this.jsonVertices = serializeVertex(hexes, gson);
                         this.jsonEdges = serializeEdges(hexes, gson);
-                        return 1;
+                        return true;
                     }
-                    return 0;
+                    return false;
                 }
             }
         }
-        return 0;
+        return false;
     }
 
-    public int placeRoad(int v1, int v2, Long accountId) {
+    public boolean placeRoad(int v1, int v2, Long accountId) {
         Gson gson = new Gson();
         List<Hex> hexes = this.deserialize(this.jsonHexes, this.jsonVertices, this.jsonEdges, gson);
         Edge targetEdge = null;
@@ -408,13 +408,13 @@ public class GameState implements DataTransferObject {
 
         //Sanity check for unconnected vertices
         if(targetEdge == null) {
-            return 0;
+            return false;
         }
 
         //Road exists, can't be placed
         boolean validRoad = false;
         if(targetEdge.hasRoad()) {
-            return 0;
+            return false;
         } else {
             validRoad = true;
         }
@@ -444,7 +444,7 @@ public class GameState implements DataTransferObject {
 
         //Invalid Road placement, can't be conncected to road
         if(!hasConnection) {
-            return 0;
+            return false;
         }
 
         //Place the road
@@ -453,7 +453,7 @@ public class GameState implements DataTransferObject {
         this.jsonHexes = serializeHex(hexes, gson);
         this.jsonVertices = serializeVertex(hexes, gson);
         this.jsonEdges = serializeEdges(hexes, gson);
-        return 1;
+        return true;
     }
 
     public int rollDice() {

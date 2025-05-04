@@ -93,6 +93,62 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
         };
     }
 
+    public PlayerState update(PlayerState playerState) {
+        String sql = "UPDATE player_state SET " +
+                "hand_ore = ?, " +
+                "hand_sheep = ?, " +
+                "hand_wheat = ?, " +
+                "hand_wood = ?, " +
+                "hand_brick = ?, " +
+                "hand_victory_point = ?, " +
+                "hand_knight = ?, " +
+                "hand_monopoly = ?, " +
+                "hand_year_of_plenty = ?, " +
+                "hand_road_building = ?, " +
+                "num_settlements = ?, " +
+                "num_roads = ?, " +
+                "num_cities = ?, " +
+                "num_longest_continuous_road = ?, " +
+                "largest_army = ?, " +
+                "longest_road = ? " +
+                "WHERE account_id = ? AND game_id = ? AND turn_number = ?";
+
+        try (PreparedStatement statement = this.connection.prepareStatement(sql)) {
+            statement.setLong(1, playerState.getOre());
+            statement.setLong(2, playerState.getSheep());
+            statement.setLong(3, playerState.getWheat());
+            statement.setLong(4, playerState.getWood());
+            statement.setLong(5, playerState.getBrick());
+            statement.setLong(6, playerState.getVictoryPoint());
+            statement.setLong(7, playerState.getKnight());
+            statement.setLong(8, playerState.getMonopoly());
+            statement.setLong(9, playerState.getYearOfPlenty());
+            statement.setLong(10, playerState.getRoadBuilding());
+            statement.setLong(11, playerState.getNumSettlements());
+            statement.setLong(12, playerState.getNumRoads());
+            statement.setLong(13, playerState.getNumCities());
+            statement.setLong(14, playerState.getNumLongestContinuousRoad());
+            statement.setBoolean(15, playerState.isLargestArmy());
+            statement.setBoolean(16, playerState.isLongestRoad());
+            statement.setLong(17, playerState.getAccountId());
+            statement.setLong(18, playerState.getGameId());
+            statement.setLong(19, playerState.getTurnNumber());
+
+            int rowsAffected = statement.executeUpdate();
+
+            if (rowsAffected > 0) {
+                return findPlayerState(playerState.getAccountId(),
+                        playerState.getGameId(),
+                        playerState.getTurnNumber());
+            } else {
+                return null;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
     public PlayerState updateOnBoardGain(long accountId, long gameId, long turnNumber, 
                                        String resourceType, int numSettlements, int numCities) {
 

@@ -42,7 +42,7 @@ public class GameAction implements DataTransferObject {
         return actionType;
     }
 
-    public void executeAction(String action) {
+    public void executeAction(String action, int v1, int v2) {
         //The following code to find the GameState and PlayerState has been supplied by Github Copilot
         GameState gameState = gameStateDAO.findById(this.gameId);
         if (gameState == null) {
@@ -62,7 +62,7 @@ public class GameAction implements DataTransferObject {
                 //Check if the player can pay for the settlement, subtract funds if possible
                 if (playerState.paySettlement()) {
                     //Check if the player can place the settlement, do so if possible, refund if not
-                    if(!gameState.placeSettlement(vertex, accountId)) {
+                    if(!gameState.placeSettlement(v1, accountId)) {
                         playerState.refundSettlement();
                     }
                 }
@@ -71,7 +71,7 @@ public class GameAction implements DataTransferObject {
                 //Check if the player can pay for the city, subtract funds if possible
                 if (playerState.payCity()) {
                     //Check if the player can place the city, do so if possible, refund if not
-                    if(!gameState.placeCity(vertex, accountId)) {
+                    if(!gameState.placeCity(v1, accountId)) {
                         playerState.refundCity();
                     }
                 }
@@ -80,7 +80,7 @@ public class GameAction implements DataTransferObject {
                 //Check if the player can pay for the road, subtract funds if possible
                 if (playerState.payRoad()) {
                     //Check if the player can place the road, do so if possible, refund if not
-                    if(!gameState.placeRoad(vertex1, vertex2, accountId)) {
+                    if(!gameState.placeRoad(v1, v2, accountId)) {
                         playerState.refundRoad();
                     }
                 }
