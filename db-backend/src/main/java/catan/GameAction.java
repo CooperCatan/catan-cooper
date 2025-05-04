@@ -1,6 +1,7 @@
 package catan;
 
 import catan.util.DataTransferObject;
+import com.google.gson.Gson;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,6 +49,8 @@ public class GameAction implements DataTransferObject {
             System.err.println("GameState not found for gameId: " + this.gameId);
             return;
         }
+        Gson gson = new Gson();
+        List<Hex> hexes = gameState.deserialize(gameState.getJsonHexes(), gameState.getJsonVertices(), gameState.getJsonEdges(), gson);
         PlayerState playerState = playerStateDAO.findById(this.accountId);
         if (playerState == null) {
             System.err.println("PlayerState not found for accountId: " + this.accountId);
@@ -91,19 +94,23 @@ public class GameAction implements DataTransferObject {
                         switch (card) {
                             case 1:
                                 playerState.setKnight(playerState.getKnight() + 1);
-                                gameState.setKnight();
+                                gameState.setBankKnight(gameState.getBankKnight() - 1);
                                 break;
                             case 2:
                                 playerState.setMonopoly(playerState.getMonopoly() + 1);
+                                gameState.setBankMonopoly(gameState.getBankMonopoly() - 1);
                                 break;
                             case 3:
                                 playerState.setYearOfPlenty(playerState.getYearOfPlenty() + 1);
+                                gameState.setBankYearOfPlenty(gameState.getBankYearOfPlenty() - 1);
                                 break;
                             case 4:
                                 playerState.setVictoryPoint(playerState.getVictoryPoint() + 1);
+                                gameState.setBankVictoryPoint(gameState.getBankVictoryPoint() - 1);
                                 break;
                             case 5:
                                 playerState.setRoadBuilding(playerState.getRoadBuilding() + 1);
+                                gameState.setBankRoadBuilding(gameState.getBankRoadBuilding() - 1);
                                 break;
                             default:
                                 System.err.println("Invalid card: " + card);
@@ -134,8 +141,8 @@ public class GameAction implements DataTransferObject {
             case "END":
                 gameState.incrementTurn();
                 gameStateDAO.update(gameState);
-                //We have to return here because the increment turn increases playerState values.
-                //If we update playerState here one of the players wont get any resources
+                //We have to return here because the increment in turn increases playerState values.
+                //If we update playerState here, one of the players won't get any resources
                 return;
                 break;
             default:

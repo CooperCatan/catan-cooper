@@ -8,7 +8,7 @@ class Vertex {
     private List<Integer> adjacentEdgeIds;
     private transient List<Edge> adjacentEdges;
     private int buildingType; // 0 for nothing, 1 for settlement, 2 for city
-    private int playerId; // ID of the player who owns the building
+    private long playerId; // ID of the player who owns the building
 
     public Vertex(int id) {
         this.id = id;
@@ -28,7 +28,7 @@ class Vertex {
         this.adjacentEdges = new ArrayList<>();
     }
 
-    public void addEdge(Vertex vertex, boolean hasRoad, int playerId) {
+    public void addEdge(Vertex vertex, boolean hasRoad, long playerId) {
         Edge newEdge = new Edge(this.getId(), vertex.getId(), hasRoad, playerId);
         if(this.adjacentEdges == null) {
             this.init();
@@ -68,11 +68,14 @@ class Vertex {
         return buildingType;
     }
 
-    public int getPlayerId() {
+    public long getPlayerId() {
         return playerId;
     }
+    public void setPlayerId(long playerId) {
+        this.playerId = playerId;
+    }
 
-    public boolean setBuilding(int newBuilding, int playerId) {
+    public boolean setBuilding(int newBuilding, long playerId) {
         //Check if the building type is valid, for this object. If so, return true
         if (this.buildingType == 0 && newBuilding == 1) {
             this.buildingType = newBuilding;

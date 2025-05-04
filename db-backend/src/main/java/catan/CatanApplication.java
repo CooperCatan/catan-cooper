@@ -199,8 +199,7 @@ public class CatanApplication {
 		try (Connection connection = dcm.getConnection()) {
 			GameState gameState = new GameState();
 			gameState.setTurnNumber(0);
-			gameState.setBoardState(null);
-			gameState.setRobberLocation(null);
+			gameState.newGame();
 			gameState.setGameOver(false);
 			gameState.setBankBrick(19);
 			gameState.setBankOre(19);

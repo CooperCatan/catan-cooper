@@ -15,7 +15,7 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
 
     @Override
     public PlayerState findById(long id) {
-        // unushed but needs to be defined
+        // unused but needs to be defined
         return null;
     }
 
@@ -31,16 +31,16 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
                 state.setAccountId(rs.getLong("account_id"));
                 state.setGameId(rs.getLong("game_id"));
                 state.setTurnNumber(rs.getLong("turn_number"));
-                state.setHandOre(rs.getLong("hand_ore"));
-                state.setHandSheep(rs.getLong("hand_sheep"));
-                state.setHandWheat(rs.getLong("hand_wheat"));
-                state.setHandWood(rs.getLong("hand_wood"));
-                state.setHandBrick(rs.getLong("hand_brick"));
-                state.setHandVictoryPoint(rs.getLong("hand_victory_point"));
-                state.setHandKnight(rs.getLong("hand_knight"));
-                state.setHandMonopoly(rs.getLong("hand_monopoly"));
-                state.setHandYearOfPlenty(rs.getLong("hand_year_of_plenty"));
-                state.setHandRoadBuilding(rs.getLong("hand_road_building"));
+                state.setOre(rs.getLong("hand_ore"));
+                state.setSheep(rs.getLong("hand_sheep"));
+                state.setWheat(rs.getLong("hand_wheat"));
+                state.setWood(rs.getLong("hand_wood"));
+                state.setBrick(rs.getLong("hand_brick"));
+                state.setVictoryPoint(rs.getLong("hand_victory_point"));
+                state.setKnight(rs.getLong("hand_knight"));
+                state.setMonopoly(rs.getLong("hand_monopoly"));
+                state.setYearOfPlenty(rs.getLong("hand_year_of_plenty"));
+                state.setRoadBuilding(rs.getLong("hand_road_building"));
                 state.setNumSettlements(rs.getLong("num_settlements"));
                 state.setNumRoads(rs.getLong("num_roads"));
                 state.setNumCities(rs.getLong("num_cities"));
@@ -84,11 +84,11 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
         if (state == null) return false;
         
         return switch (resourceType.toLowerCase()) {
-            case "ore" -> state.getHandOre() >= quantity;
-            case "sheep" -> state.getHandSheep() >= quantity;
-            case "wheat" -> state.getHandWheat() >= quantity;
-            case "wood" -> state.getHandWood() >= quantity;
-            case "brick" -> state.getHandBrick() >= quantity;
+            case "ore" -> state.getOre() >= quantity;
+            case "sheep" -> state.getSheep() >= quantity;
+            case "wheat" -> state.getWheat() >= quantity;
+            case "wood" -> state.getWood() >= quantity;
+            case "brick" -> state.getBrick() >= quantity;
             default -> false;
         };
     }
@@ -132,8 +132,8 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
         if (state == null) return null;
 
         // get total number of resource cards
-        long totalCards = state.getHandOre() + state.getHandSheep() + 
-                         state.getHandWheat() + state.getHandWood() + state.getHandBrick();
+        long totalCards = state.getOre() + state.getSheep() +
+                         state.getWheat() + state.getWood() + state.getBrick();
         if (totalCards == 0) return state;
 
         // randomly select which resource to take
@@ -141,10 +141,10 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
         long randomNum = random.nextLong(totalCards) + 1;
         String resourceToTake;
         
-        if (randomNum <= state.getHandOre()) resourceToTake = "ore";
-        else if (randomNum <= state.getHandOre() + state.getHandSheep()) resourceToTake = "sheep";
-        else if (randomNum <= state.getHandOre() + state.getHandSheep() + state.getHandWheat()) resourceToTake = "wheat";
-        else if (randomNum <= state.getHandOre() + state.getHandSheep() + state.getHandWheat() + state.getHandWood()) resourceToTake = "wood";
+        if (randomNum <= state.getOre()) resourceToTake = "ore";
+        else if (randomNum <= state.getOre() + state.getSheep()) resourceToTake = "sheep";
+        else if (randomNum <= state.getOre() + state.getSheep() + state.getWheat()) resourceToTake = "wheat";
+        else if (randomNum <= state.getOre() + state.getSheep() + state.getWheat() + state.getWood()) resourceToTake = "wood";
         else resourceToTake = "brick";
 
         String sql = "UPDATE player_state SET hand_" + resourceToTake + 
