@@ -61,7 +61,7 @@ const GameRoom: React.FC = () => {
       },
       {
         id: 3,
-        username: currentUser.displayName || "You",
+        username: currentUser.displayName || currentUser.email?.split('@')[0] || "Anonymous",
         elo: 1000,
         totalGames: 0,
         totalWins: 0,
@@ -139,33 +139,38 @@ const GameRoom: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="h-screen bg-gray-100 flex overflow-hidden">
       {/* quit */}
       <button
         onClick={() => navigate('/lobby')}
-        className="absolute top-4 left-4 px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors shadow-md flex items-center space-x-1"
+        className="fixed top-4 left-4 z-10 px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors shadow-md flex items-center space-x-1"
       >
         <span>✕</span>
         <span>Quit</span>
       </button>
 
       {/* game board section LHS */}
-      <div className="flex-1 p-4">
-        <div className="bg-white rounded-xl shadow-lg p-4 h-full">
+      <div className="flex-1">
+        <div className="h-full">
           <div className="text-center mb-2">
             <h2 className="text-xl font-bold text-gray-800">Game #{gameId}</h2>
             <div className="text-lg font-medium text-catan-brick">
               Game Starting in: {countdown}s
             </div>
           </div>
-          <div className="w-full h-[calc(100%-80px)] bg-blue-50 rounded-lg flex items-center justify-center">
-            <GameBoard />
+          <div className="w-full h-[calc(100%-60px)] bg-blue-50 flex items-center justify-center">
+            <GameBoard 
+              gameId={Number(gameId)}
+              accountId={Number(auth.currentUser?.uid)}
+              isSetupPhase={countdown > 0}
+              isCurrentTurn={true}
+            />
           </div>
         </div>
       </div>
 
       {/* all players section RHS */}
-      <div className="w-72 bg-white shadow-lg p-3 overflow-y-auto">
+      <div className="w-80 bg-white shadow-lg p-3 overflow-y-auto">
         <h2 className="text-lg font-bold text-gray-800 mb-3">Players</h2>
         <div className="space-y-2">
           {/* regular players */}
@@ -175,7 +180,7 @@ const GameRoom: React.FC = () => {
           
           {/* self */}
           <div className="mt-4 pt-2 border-t border-gray-200">
-            <h3 className="text-xs font-medium text-gray-500 mb-1">You</h3>
+            <h3 className="text-xs font-medium text-gray-500 mb-1">Current Player</h3>
             {players.filter(p => p.isCurrentUser).map(player => (
               <PlayerCard key={player.id} player={player} />
             ))}
