@@ -111,10 +111,10 @@ const GameRoom: React.FC = () => {
   const handleTurnComplete = () => {
     // rotate to next player's turn
     setCurrentTurn(prev => {
-      if (prev === 3) return 1; // after your turn (3), go to Player 1
+      if (prev === 3) return 1; // after my turn (3), go to Player 1
       if (prev === 1) return 2;
       if (prev === 2) return 3;
-      return 3; // default to your turn if something goes wrong
+      return 3; // default to my turn againif something goes wrong
     });
   };
 
