@@ -29,9 +29,17 @@ public class GameAction implements DataTransferObject {
     public long getGameId() {
         return gameId;
     }
+    // need gameId setter for GameAction
+    public void setGameId(long gameId) {
+        this.gameId = gameId;
+    }
 
     public long getAccountId() {
         return accountId;
+    }
+    // need accountId setter for GameAction
+    public void setAccountId(long accountId) {
+        this.accountId = accountId;
     }
 
     public long getTurn() {
@@ -57,6 +65,34 @@ public class GameAction implements DataTransferObject {
             return;
         }
 
+        // check if it's the setup phase and is player's turn
+        if (gameState.isSetupPhase()) {
+            if (accountId != gameState.getCurrentPlayer()) {
+                System.err.println("Not your turn!");
+                return;
+            }
+
+            switch (action) {
+                case "SETTLEMENT":
+                    if (gameState.placeInitialSettlement(v1, accountId)) {
+                        playerState.setNumSettlements(playerState.getNumSettlements() + 1);
+                    }
+                    break;
+                case "ROAD":
+                    if (gameState.placeInitialRoad(v1, v2, accountId)) {
+                        playerState.setNumRoads(playerState.getNumRoads() + 1);
+                    }
+                    break;
+                default:
+                    System.err.println("Invalid action during setup phase: " + action);
+                    break;
+            }
+            gameStateDAO.update(gameState);
+            playerStateDAO.update(playerState);
+            return;
+        }
+
+        // normal game phase actions
         switch (action) {
             case "SETTLEMENT":
                 //Check if the player can pay for the settlement, subtract funds if possible

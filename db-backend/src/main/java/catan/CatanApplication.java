@@ -62,12 +62,12 @@ public class CatanApplication {
 			AccountDAO accountDAO = new AccountDAO(connection);
 			Account account = new Account();
 			
-			account.setUsername(username.trim());
-			account.setEmail(email.trim());
-			account.setTotalGames(0);
-			account.setTotalWins(0);
-			account.setTotalLosses(0);
-			account.setElo(1000);
+			account.setUsername(username.trim()); // trim whitespace
+			account.setEmail(email.trim()); // trim whitespace
+			account.setTotalGames(0); // set to 0
+			account.setTotalWins(0); // set to 0
+			account.setTotalLosses(0); // set to 0
+			account.setElo(1000); // set to 1000 (default)
 			
 			try {
 				Account createdAccount = accountDAO.create(account);
@@ -107,7 +107,7 @@ public class CatanApplication {
 			if (account != null) {
 				return ResponseEntity.ok(account);
 			} else {
-				return ResponseEntity.notFound().build();
+				return ResponseEntity.notFound().build(); 
 			}
 		} catch(SQLException e) {
 			e.printStackTrace();
@@ -201,6 +201,7 @@ public class CatanApplication {
 			gameState.setTurnNumber(0);
 			gameState.newGame();
 			gameState.setGameOver(false);
+			// default card values in standard boardgame below, hard-coded
 			gameState.setBankBrick(19);
 			gameState.setBankOre(19);
 			gameState.setBankSheep(19);
@@ -502,6 +503,141 @@ public class CatanApplication {
 					"error", "Database error",
 					"message", e.getMessage(),
 					"details", "Error occurred while fetching accounts"
+				));
+		}
+	}
+
+	@GetMapping("/api/games/{gameId}")
+	public ResponseEntity<Object> getGameState(@PathVariable long gameId) {
+		try (Connection connection = dcm.getConnection()) {
+			GameStateDAO gameStateDAO = new GameStateDAO(connection);
+			GameState gameState = gameStateDAO.findById(gameId);
+			
+			if (gameState == null) {
+				return ResponseEntity.notFound().build();
+			}
+			
+			return ResponseEntity.ok(Map.of(
+				"gameState", gameState, 
+				"isSetupPhase", gameState.isSetupPhase(),
+				"currentPlayer", gameState.getCurrentPlayer()
+			));
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body(Map.of(
+					"error", "Database error",
+					"message", e.getMessage()
+				));
+		}
+	}
+
+	@PostMapping("/api/games/{gameId}/join")
+	public ResponseEntity<Object> joinGame(@PathVariable long gameId, @RequestBody Map<String, Long> data) {
+		if (!data.containsKey("accountId")) {
+			return ResponseEntity.badRequest()
+				.body(Map.of("error", "Missing accountId in request body")); 
+		}
+		Long accountId = data.get("accountId");
+
+		try (Connection connection = dcm.getConnection()) {
+			GameStateDAO gameStateDAO = new GameStateDAO(connection);
+			GameState gameState = gameStateDAO.findById(gameId);
+			
+			if (gameState == null) {
+				return ResponseEntity.notFound()
+					.build();
+			}
+
+			// add player to the game's list of players
+			gameState.addPlayer(accountId);
+
+			// create initial player state
+			PlayerStateDAO playerStateDAO = new PlayerStateDAO(connection);
+			PlayerState playerState = new PlayerState();
+			playerState.setAccountId(accountId);
+			playerState.setGameId(gameId);
+			playerState.setTurnNumber(gameState.getTurnNumber());
+			
+			// init resources to 0
+			playerState.setBrick(0);
+			playerState.setOre(0);
+			playerState.setSheep(0);
+			playerState.setWheat(0);
+			playerState.setWood(0);
+			
+			// init development cards to 0
+			playerState.setKnight(0);
+			playerState.setMonopoly(0);
+			playerState.setYearOfPlenty(0);
+			playerState.setVictoryPoint(0);
+			playerState.setRoadBuilding(0);
+			
+			// init building counts to 0
+			playerState.setNumSettlements(0);
+			playerState.setNumCities(0);
+			playerState.setNumRoads(0);
+			
+			playerStateDAO.create(playerState);
+			gameStateDAO.update(gameState);
+
+			return ResponseEntity.ok(Map.of(
+				"message", "Successfully joined game",
+				"gameState", gameState,
+				"playerState", playerState
+			));
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body(Map.of(
+					"error", "Database error",
+					"message", e.getMessage()
+				));
+		}
+	}
+
+	@PostMapping("/api/games/{gameId}/setup-action")
+	public ResponseEntity<Object> executeSetupAction(
+			@PathVariable long gameId,
+			@RequestBody Map<String, Object> data) {
+		
+		if (!data.containsKey("accountId") || !data.containsKey("action") || 
+			!data.containsKey("v1") || !data.containsKey("v2")) {
+			return ResponseEntity.badRequest()
+				.body(Map.of("error", "Missing required parameters"));
+		}
+
+		try (Connection connection = dcm.getConnection()) {
+			GameStateDAO gameStateDAO = new GameStateDAO(connection);
+			PlayerStateDAO playerStateDAO = new PlayerStateDAO(connection);
+			
+			long accountId = Long.parseLong(data.get("accountId").toString());
+			GameAction gameAction = new GameAction(gameStateDAO, playerStateDAO);
+			gameAction.setGameId(gameId);
+			gameAction.setAccountId(accountId);
+			
+			int v1 = Integer.parseInt(data.get("v1").toString());
+			int v2 = Integer.parseInt(data.get("v2").toString());
+			
+			gameAction.executeAction(
+				data.get("action").toString(),
+				v1,
+				v2
+			);
+
+			GameState gameState = gameStateDAO.findById(gameId);
+			PlayerState playerState = playerStateDAO.findPlayerState(accountId, gameId, gameState.getTurnNumber());
+
+			return ResponseEntity.ok(Map.of(
+				"gameState", gameState,
+				"playerState", playerState
+			));
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body(Map.of(
+					"error", "Database error",
+					"message", e.getMessage()
 				));
 		}
 	}
