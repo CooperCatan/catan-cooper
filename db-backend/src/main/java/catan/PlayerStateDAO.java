@@ -15,7 +15,7 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
 
     @Override
     public PlayerState findById(long id) {
-        // unushed but needs to be defined
+        // unused but needs to be defined
         return null;
     }
 
@@ -31,16 +31,16 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
                 state.setAccountId(rs.getLong("account_id"));
                 state.setGameId(rs.getLong("game_id"));
                 state.setTurnNumber(rs.getLong("turn_number"));
-                state.setHandOre(rs.getLong("hand_ore"));
-                state.setHandSheep(rs.getLong("hand_sheep"));
-                state.setHandWheat(rs.getLong("hand_wheat"));
-                state.setHandWood(rs.getLong("hand_wood"));
-                state.setHandBrick(rs.getLong("hand_brick"));
-                state.setHandVictoryPoint(rs.getLong("hand_victory_point"));
-                state.setHandKnight(rs.getLong("hand_knight"));
-                state.setHandMonopoly(rs.getLong("hand_monopoly"));
-                state.setHandYearOfPlenty(rs.getLong("hand_year_of_plenty"));
-                state.setHandRoadBuilding(rs.getLong("hand_road_building"));
+                state.setOre(rs.getLong("hand_ore"));
+                state.setSheep(rs.getLong("hand_sheep"));
+                state.setWheat(rs.getLong("hand_wheat"));
+                state.setWood(rs.getLong("hand_wood"));
+                state.setBrick(rs.getLong("hand_brick"));
+                state.setVictoryPoint(rs.getLong("hand_victory_point"));
+                state.setKnight(rs.getLong("hand_knight"));
+                state.setMonopoly(rs.getLong("hand_monopoly"));
+                state.setYearOfPlenty(rs.getLong("hand_year_of_plenty"));
+                state.setRoadBuilding(rs.getLong("hand_road_building"));
                 state.setNumSettlements(rs.getLong("num_settlements"));
                 state.setNumRoads(rs.getLong("num_roads"));
                 state.setNumCities(rs.getLong("num_cities"));
@@ -84,13 +84,69 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
         if (state == null) return false;
         
         return switch (resourceType.toLowerCase()) {
-            case "ore" -> state.getHandOre() >= quantity;
-            case "sheep" -> state.getHandSheep() >= quantity;
-            case "wheat" -> state.getHandWheat() >= quantity;
-            case "wood" -> state.getHandWood() >= quantity;
-            case "brick" -> state.getHandBrick() >= quantity;
+            case "ore" -> state.getOre() >= quantity;
+            case "sheep" -> state.getSheep() >= quantity;
+            case "wheat" -> state.getWheat() >= quantity;
+            case "wood" -> state.getWood() >= quantity;
+            case "brick" -> state.getBrick() >= quantity;
             default -> false;
         };
+    }
+
+    public PlayerState update(PlayerState playerState) {
+        String sql = "UPDATE player_state SET " +
+                "hand_ore = ?, " +
+                "hand_sheep = ?, " +
+                "hand_wheat = ?, " +
+                "hand_wood = ?, " +
+                "hand_brick = ?, " +
+                "hand_victory_point = ?, " +
+                "hand_knight = ?, " +
+                "hand_monopoly = ?, " +
+                "hand_year_of_plenty = ?, " +
+                "hand_road_building = ?, " +
+                "num_settlements = ?, " +
+                "num_roads = ?, " +
+                "num_cities = ?, " +
+                "num_longest_continuous_road = ?, " +
+                "largest_army = ?, " +
+                "longest_road = ? " +
+                "WHERE account_id = ? AND game_id = ? AND turn_number = ?";
+
+        try (PreparedStatement statement = this.connection.prepareStatement(sql)) {
+            statement.setLong(1, playerState.getOre());
+            statement.setLong(2, playerState.getSheep());
+            statement.setLong(3, playerState.getWheat());
+            statement.setLong(4, playerState.getWood());
+            statement.setLong(5, playerState.getBrick());
+            statement.setLong(6, playerState.getVictoryPoint());
+            statement.setLong(7, playerState.getKnight());
+            statement.setLong(8, playerState.getMonopoly());
+            statement.setLong(9, playerState.getYearOfPlenty());
+            statement.setLong(10, playerState.getRoadBuilding());
+            statement.setLong(11, playerState.getNumSettlements());
+            statement.setLong(12, playerState.getNumRoads());
+            statement.setLong(13, playerState.getNumCities());
+            statement.setLong(14, playerState.getNumLongestContinuousRoad());
+            statement.setBoolean(15, playerState.isLargestArmy());
+            statement.setBoolean(16, playerState.isLongestRoad());
+            statement.setLong(17, playerState.getAccountId());
+            statement.setLong(18, playerState.getGameId());
+            statement.setLong(19, playerState.getTurnNumber());
+
+            int rowsAffected = statement.executeUpdate();
+
+            if (rowsAffected > 0) {
+                return findPlayerState(playerState.getAccountId(),
+                        playerState.getGameId(),
+                        playerState.getTurnNumber());
+            } else {
+                return null;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
     }
 
     public PlayerState updateOnBoardGain(long accountId, long gameId, long turnNumber, 
@@ -132,8 +188,8 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
         if (state == null) return null;
 
         // get total number of resource cards
-        long totalCards = state.getHandOre() + state.getHandSheep() + 
-                         state.getHandWheat() + state.getHandWood() + state.getHandBrick();
+        long totalCards = state.getOre() + state.getSheep() +
+                         state.getWheat() + state.getWood() + state.getBrick();
         if (totalCards == 0) return state;
 
         // randomly select which resource to take
@@ -141,10 +197,10 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
         long randomNum = random.nextLong(totalCards) + 1;
         String resourceToTake;
         
-        if (randomNum <= state.getHandOre()) resourceToTake = "ore";
-        else if (randomNum <= state.getHandOre() + state.getHandSheep()) resourceToTake = "sheep";
-        else if (randomNum <= state.getHandOre() + state.getHandSheep() + state.getHandWheat()) resourceToTake = "wheat";
-        else if (randomNum <= state.getHandOre() + state.getHandSheep() + state.getHandWheat() + state.getHandWood()) resourceToTake = "wood";
+        if (randomNum <= state.getOre()) resourceToTake = "ore";
+        else if (randomNum <= state.getOre() + state.getSheep()) resourceToTake = "sheep";
+        else if (randomNum <= state.getOre() + state.getSheep() + state.getWheat()) resourceToTake = "wheat";
+        else if (randomNum <= state.getOre() + state.getSheep() + state.getWheat() + state.getWood()) resourceToTake = "wood";
         else resourceToTake = "brick";
 
         String sql = "UPDATE player_state SET hand_" + resourceToTake + 

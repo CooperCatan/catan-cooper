@@ -78,13 +78,9 @@ public class GameStateDAO extends DataAccessObject<GameState> {
             
             // always start with turn 0 for a new game
             statement.setLong(1, 0);
-            statement.setString(2, dto.getBoardState() != null ? dto.getBoardState().toString() : "{}");
-            if (dto.getWinnerId() != null) {
-                statement.setLong(3, dto.getWinnerId());
-            } else {
-                statement.setNull(3, java.sql.Types.BIGINT);
-            }
-            statement.setString(4, dto.getRobberLocation() != null ? dto.getRobberLocation().toString() : "{\"hex\": \"desert\"}");
+            statement.setString(2, dto.getJsonHexes());
+            statement.setString(3, dto.getJsonVertices());
+            statement.setString(4, dto.getJsonEdges());
             statement.setBoolean(5, dto.isGameOver());
             statement.setLong(6, dto.getBankBrick());
             statement.setLong(7, dto.getBankOre());
@@ -117,6 +113,57 @@ public class GameStateDAO extends DataAccessObject<GameState> {
             System.err.println("ERROR - Message: " + e.getMessage());
             e.printStackTrace();
             throw new RuntimeException("Failed to create game state: " + e.getMessage(), e);
+        }
+    }
+
+    public GameState update(GameState gameState) {
+        String sql = "UPDATE game_state SET " +
+                "json_hexes = ?, " +
+                "json_vertices = ?, " +
+                "json_edges = ?, " +
+                "winner_id = ?, " +
+                "is_game_over = ?, " +
+                "bank_brick = ?, " +
+                "bank_ore = ?, " +
+                "bank_sheep = ?, " +
+                "bank_wheat = ?, " +
+                "bank_wood = ?, " +
+                "bank_year_of_plenty = ?, " +
+                "bank_monopoly = ?, " +
+                "bank_road_building = ?, " +
+                "bank_victory_point = ?, " +
+                "bank_knight = ? " +
+                "WHERE game_id = ? AND turn_number = ?";
+
+        try (PreparedStatement statement = this.connection.prepareStatement(sql)) {
+            statement.setString(1, gameState.getJsonHexes());
+            statement.setString(2, gameState.getJsonVertices());
+            statement.setString(3, gameState.getJsonEdges());
+            statement.setObject(4, gameState.getWinnerId());
+            statement.setBoolean(5, gameState.isGameOver());
+            statement.setLong(6, gameState.getBankBrick());
+            statement.setLong(7, gameState.getBankOre());
+            statement.setLong(8, gameState.getBankSheep());
+            statement.setLong(9, gameState.getBankWheat());
+            statement.setLong(10, gameState.getBankWood());
+            statement.setLong(11, gameState.getBankYearOfPlenty());
+            statement.setLong(12, gameState.getBankMonopoly());
+            statement.setLong(13, gameState.getBankRoadBuilding());
+            statement.setLong(14, gameState.getBankVictoryPoint());
+            statement.setLong(15, gameState.getBankKnight());
+            statement.setLong(16, gameState.getGameId());
+            statement.setLong(17, gameState.getTurnNumber());
+
+            int rowsAffected = statement.executeUpdate();
+
+            if (rowsAffected > 0) {
+                return findByGameIdAndTurn(gameState.getGameId(), gameState.getTurnNumber());
+            } else {
+                return null;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
 
@@ -187,18 +234,6 @@ public class GameStateDAO extends DataAccessObject<GameState> {
         GameState gameState = new GameState();
         gameState.setGameId(rs.getLong("game_id"));
         gameState.setTurnNumber(rs.getLong("turn_number"));
-        try {
-            String boardStateStr = rs.getString("board_state");
-            if (boardStateStr != null) {
-                gameState.setBoardState(mapper.readTree(boardStateStr));
-            }
-            String robberLocationStr = rs.getString("robber_location");
-            if (robberLocationStr != null) {
-                gameState.setRobberLocation(mapper.readTree(robberLocationStr));
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Error parsing JSON", e);
-        }
         Long winnerId = rs.getLong("winner_id");
         if (!rs.wasNull()) {
             gameState.setWinnerId(winnerId);

@@ -3,9 +3,8 @@ package catan;
 import catan.util.DataTransferObject;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.sql.Connection;
+import java.util.*;
 
 public class GameState implements DataTransferObject {
     private long gameId;
@@ -25,10 +24,14 @@ public class GameState implements DataTransferObject {
     private long bankRoadBuilding;
     private long bankVictoryPoint;
     private long bankKnight;
+    private Connection connection;
+    private PlayerStateDAO playerStateDAO;
+
 
     public GameState() {
-        this.boardState = null;  
-        this.robberLocation = null;  
+        this.jsonHexes = null;
+        this.jsonVertices = null;
+        this.jsonEdges = null;
         this.isGameOver = false;
         this.bankBrick = 19;
         this.bankOre = 19;
@@ -42,14 +45,20 @@ public class GameState implements DataTransferObject {
         this.bankKnight = 14;
     }
 
+    public GameState(Connection connection) {
+        this();  // Call the default constructor to initialize default values
+        this.connection = connection;
+        this.playerStateDAO = new PlayerStateDAO(connection);
+    }
+
     public void newGame() {
-        vertices = new Vertex[54];
+        Vertex[] vertices = new Vertex[54];
         //Make all the vertices on the board
         for (int i = 0; i < 54; i++) {
-            this.vertices[i] = new Vertex(i+1);
+            vertices[i] = new Vertex(i+1);
         }
         //Make a list of hexes
-        hexes = new ArrayList<>();
+        List<Hex> hexes = new ArrayList<Hex>();
 
         //Make the lists of resources and roll values, and then shuffle them
         List<String> resources = new ArrayList<>(Arrays.asList(
@@ -79,13 +88,13 @@ public class GameState implements DataTransferObject {
             hexes.add(insert);
             //Now assign all of these hexes their adjacent vertices
             //The linker also handles edges
-            linkVertices(insert);
+            linkVertices(insert, vertices);
         }
 
         Gson gson = new Gson();
-        String jHexes = board.serializeHex(hexes, gson);
-        String jVertices = board.serializeVertex(hexes, gson);
-        String jEdges = board.serializeEdges(hexes, gson);
+        String jHexes = serializeHex(hexes, gson);
+        String jVertices = serializeVertex(hexes, gson);
+        String jEdges = serializeEdges(hexes, gson);
         this.jsonHexes = jHexes;
         this.jsonVertices = jVertices;
         this.jsonEdges = jEdges;
@@ -166,7 +175,7 @@ public class GameState implements DataTransferObject {
         return hexes;
     }
 
-    public void linkVertices(Hex index) {
+    public void linkVertices(Hex index, Vertex[] vertices) {
         if(index.getId() <= 3) {
             //These hexes "view" their surrounding vertices in clockwise order from top left to bottom left 0->5
             //This means that vertex "3" to hex 1 is vertex "5" to hex 2 (similarly vertex 2 on hex 1 is vertex 0 on hex 2)
@@ -233,9 +242,6 @@ public class GameState implements DataTransferObject {
     public Long getWinnerId() { return winnerId; }
     public void setWinnerId(Long winnerId) { this.winnerId = winnerId; }
 
-    public String getRobberLocation() { return robberLocation; }
-    public void setRobberLocation(String robberLocation) { this.robberLocation = robberLocation; }
-
     public boolean isGameOver() { return isGameOver; }
     public void setGameOver(boolean gameOver) { isGameOver = gameOver; }
 
@@ -289,7 +295,7 @@ public class GameState implements DataTransferObject {
         }
 
         //Randomly select a card from the weighted list
-        int selectedCard = weightedDeck.get(this.random.nextInt(weightedDeck.size()));
+        int selectedCard = weightedDeck.get(random.nextInt(weightedDeck.size()));
 
         //Reduce the count of the selected card
         switch (selectedCard) {
@@ -309,7 +315,7 @@ public class GameState implements DataTransferObject {
         return;
     }
 
-    public int placeCity(int v, Long accountId) {
+    public boolean placeCity(int v, Long accountId) {
         Gson gson = new Gson();
         List<Hex> hexes = this.deserialize(this.jsonHexes, this.jsonVertices, this.jsonEdges, gson);
         //Look for the right vertex in the deserialized board
@@ -320,16 +326,16 @@ public class GameState implements DataTransferObject {
                         this.jsonHexes = serializeHex(hexes, gson);
                         this.jsonVertices = serializeVertex(hexes, gson);
                         this.jsonEdges = serializeEdges(hexes, gson);
-                        return 1;
+                        return true;
                     }
-                    return 0;
+                    return false;
                 }
             }
         }
-        return 0;
+        return false;
     }
 
-    public int placeSettlement(int v, Long accountId) {
+    public boolean placeSettlement(int v, Long accountId) {
         Gson gson = new Gson();
         List<Hex> hexes = this.deserialize(this.jsonHexes, this.jsonVertices, this.jsonEdges, gson);
         //Look for the right vertex in the deserialized board
@@ -343,13 +349,13 @@ public class GameState implements DataTransferObject {
                         }
                     }
                     if(!validRoad) {
-                        return 0;
+                        return false;
                     }
                     boolean noneAdjacent = true;
                     for(int i = 0; i < vex.getAdjacentEdgeIds().size(); i++) {
                         for(Hex targetHex : hexes) {
                             for(Vertex targetVex : targetHex.getVertices()) {
-                                if(targetVex.getId() == vex.getAdjacentEdgeIds().get(i) && targetVex.getBuildingType()) {
+                                if((targetVex.getId() == vex.getAdjacentEdgeIds().get(i)) && targetVex.getBuildingType() >= 1) {
                                     noneAdjacent = false;
                                 }
                             }
@@ -360,16 +366,16 @@ public class GameState implements DataTransferObject {
                         this.jsonHexes = serializeHex(hexes, gson);
                         this.jsonVertices = serializeVertex(hexes, gson);
                         this.jsonEdges = serializeEdges(hexes, gson);
-                        return 1;
+                        return true;
                     }
-                    return 0;
+                    return false;
                 }
             }
         }
-        return 0;
+        return false;
     }
 
-    public int placeRoad(int v1, int v2, Long accountId) {
+    public boolean placeRoad(int v1, int v2, Long accountId) {
         Gson gson = new Gson();
         List<Hex> hexes = this.deserialize(this.jsonHexes, this.jsonVertices, this.jsonEdges, gson);
         Edge targetEdge = null;
@@ -392,9 +398,9 @@ public class GameState implements DataTransferObject {
             }
         }
 
-        //Find edge that we want to build on
+        //Find the edge that we want to build on
         for(Edge edge : vertex1.getAdjacentEdges()) {
-            if((edge.getVertex1() == vertexId1 && edge.getVertex2() == vertexId2) || (edge.getVertex1() == vertexId2 && edge.getVertex2() == vertexId1)) {
+            if((edge.getVertex1() == v1 && edge.getVertex2() == v2) || (edge.getVertex1() == v2 && edge.getVertex2() == v1)) {
                 targetEdge = edge;
                 break;
             }
@@ -402,13 +408,13 @@ public class GameState implements DataTransferObject {
 
         //Sanity check for unconnected vertices
         if(targetEdge == null) {
-            return 0;
+            return false;
         }
 
         //Road exists, can't be placed
         boolean validRoad = false;
         if(targetEdge.hasRoad()) {
-            return 0;
+            return false;
         } else {
             validRoad = true;
         }
@@ -438,7 +444,7 @@ public class GameState implements DataTransferObject {
 
         //Invalid Road placement, can't be conncected to road
         if(!hasConnection) {
-            return 0;
+            return false;
         }
 
         //Place the road
@@ -447,7 +453,7 @@ public class GameState implements DataTransferObject {
         this.jsonHexes = serializeHex(hexes, gson);
         this.jsonVertices = serializeVertex(hexes, gson);
         this.jsonEdges = serializeEdges(hexes, gson);
-        return 1;
+        return true;
     }
 
     public int rollDice() {
@@ -471,7 +477,7 @@ public class GameState implements DataTransferObject {
                             return 0;
                         }
                         //Since buildingType is 1 to 1 with the amount of resources you get, just add the building type
-                        switch(hex.getResource()) {
+                        switch(hex.getResourceType()) {
                             case "brick" -> {
                                 int amount = vex.getBuildingType();
                                 if (bankBrick >= amount) {
@@ -485,24 +491,28 @@ public class GameState implements DataTransferObject {
                                     playerState.setWood(playerState.getWood() + amount);
                                     bankWood -= amount;
                                 }
+                            }
                             case "wheat" -> {
                                 int amount = vex.getBuildingType();
                                 if (bankWheat >= amount) {
                                     playerState.setWheat(playerState.getWheat() + amount);
                                     bankWheat -= amount;
                                 }
+                            }
                             case "ore" -> {
                                 int amount = vex.getBuildingType();
                                 if (bankOre >= amount) {
                                     playerState.setOre(playerState.getOre() + amount);
                                     bankOre -= amount;
                                 }
+                            }
                             case "sheep" -> {
                                 int amount = vex.getBuildingType();
                                 if (bankSheep >= amount) {
                                     playerState.setSheep(playerState.getSheep() + amount);
                                     bankSheep -= amount;
                                 }
+                            }
                         }
                         playerStateDAO.update(playerState);
                     }
@@ -510,5 +520,17 @@ public class GameState implements DataTransferObject {
             }
         }
         return roll;
+    }
+
+    public String getJsonHexes() {
+        return jsonHexes;
+    }
+
+    public String getJsonVertices() {
+        return jsonVertices;
+    }
+
+    public String getJsonEdges() {
+        return jsonEdges;
     }
 }
