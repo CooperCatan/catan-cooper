@@ -21,8 +21,7 @@ interface Vertex {
   id: number;
   x: number;
   y: number;
-  building?: {
-    type: 'settlement' | 'city';
+  settlement?: {
     playerId: number;
   };
 }
@@ -41,6 +40,7 @@ interface GameBoardProps {
   accountId: number;
   isSetupPhase: boolean;
   isCurrentTurn: boolean;
+  onPlacementComplete: () => void;
 }
 
 const TILE_SIZE = 60;
@@ -109,17 +109,31 @@ const PORT_COLORS = {
   any: '#95a5a6',
 };
 
-const GameBoard: React.FC<GameBoardProps> = ({ gameId, accountId, isSetupPhase, isCurrentTurn }) => {
+export const PLAYER_COLORS: Record<number, string> = {
+  1: '#e74c3c', // red
+  2: '#2ecc71', // green
+  3: '#3498db', // blue
+  4: '#f1c40f'  // yellow
+};
+
+const SETTLEMENT_SIZE = 20;
+
+const GameBoard: React.FC<GameBoardProps> = ({ 
+  gameId, 
+  accountId, 
+  isSetupPhase, 
+  isCurrentTurn,
+  onPlacementComplete 
+}) => {
   const [vertices, setVertices] = useState<Vertex[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [selectedVertex, setSelectedVertex] = useState<number | null>(null);
-  const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const [placementMode, setPlacementMode] = useState<'settlement' | 'road' | null>(null);
+  const [showValidPlacements, setShowValidPlacements] = useState(true);
 
-  // calculate vertex positions based on hex grid
+  // calculate vertices and edges on mount
   useEffect(() => {
     const calculatedVertices: Vertex[] = [];
-    // calculate vertex positions for each hex corner
     TILES.forEach(tile => {
       const centerX = tile.x * HEX_WIDTH + HEX_WIDTH * 2;
       const centerY = tile.y * HEX_HEIGHT * 0.75 + HEX_HEIGHT;
@@ -129,7 +143,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameId, accountId, isSetupPhase, 
         const x = centerX + TILE_SIZE * Math.cos(angle);
         const y = centerY + TILE_SIZE * Math.sin(angle);
         
-        // add vertex if it doesn't exist (check for nearby vertices to avoid duplicates)
         if (!calculatedVertices.some(v => 
           Math.abs(v.x - x) < 5 && Math.abs(v.y - y) < 5
         )) {
@@ -143,11 +156,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameId, accountId, isSetupPhase, 
     });
     setVertices(calculatedVertices);
 
-    // calculate edges between vertices
     const calculatedEdges: Edge[] = [];
     calculatedVertices.forEach(v1 => {
       calculatedVertices.forEach(v2 => {
-        // create edge if vertices are close enough to be connected
         const distance = Math.sqrt(
           Math.pow(v1.x - v2.x, 2) + Math.pow(v1.y - v2.y, 2)
         );
@@ -166,9 +177,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameId, accountId, isSetupPhase, 
     setEdges(calculatedEdges);
   }, []);
 
-  const handleVertexClick = async (vertexId: number) => {
-    if (!isSetupPhase || !isCurrentTurn) return;
-    
+  const handleVertexClick = async (vertex: Vertex) => {
+    if (!isSetupPhase || !isCurrentTurn || vertex.settlement || placementMode === 'road' || !showValidPlacements) return;
+
     try {
       const response = await fetch(`http://localhost:8080/api/games/${gameId}/setup-action`, {
         method: 'POST',
@@ -178,30 +189,30 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameId, accountId, isSetupPhase, 
         body: JSON.stringify({
           accountId,
           action: 'SETTLEMENT',
-          v1: vertexId,
-          v2: 0 // not used for settlements
+          v1: vertex.id,
+          v2: 0
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to place settlement');
+      if (response.ok) {
+        setVertices(prev => prev.map(v => 
+          v.id === vertex.id 
+            ? { ...v, settlement: { playerId: accountId } }
+            : v
+        ));
+        setSelectedVertex(vertex.id);
+        setPlacementMode('road');
+        setShowValidPlacements(true); // reset for road placement
       }
-
-      const result = await response.json();
-      // update the game state with the new settlement
-      setVertices(vertices.map(v => 
-        v.id === vertexId 
-          ? { ...v, building: { type: 'settlement', playerId: accountId } }
-          : v
-      ));
-      setPlacementMode('road');
     } catch (error) {
       console.error('Error placing settlement:', error);
     }
   };
 
   const handleEdgeClick = async (edge: Edge) => {
-    if (!isSetupPhase || !isCurrentTurn || placementMode !== 'road') return;
+    if (!isSetupPhase || !isCurrentTurn || edge.road || placementMode !== 'road' || !showValidPlacements) return;
+    
+    if (!selectedVertex || (edge.v1 !== selectedVertex && edge.v2 !== selectedVertex)) return;
 
     try {
       const response = await fetch(`http://localhost:8080/api/games/${gameId}/setup-action`, {
@@ -217,18 +228,17 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameId, accountId, isSetupPhase, 
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to place road');
+      if (response.ok) {
+        setEdges(prev => prev.map(e => 
+          e.id === edge.id 
+            ? { ...e, road: { playerId: accountId } }
+            : e
+        ));
+        setSelectedVertex(null);
+        setPlacementMode(null);
+        setShowValidPlacements(false);
+        onPlacementComplete(); // notify parent that turn is complete
       }
-
-      const result = await response.json();
-      // update the game state with the new road
-      setEdges(edges.map(e => 
-        e.id === edge.id 
-          ? { ...e, road: { playerId: accountId } }
-          : e
-      ));
-      setPlacementMode(null);
     } catch (error) {
       console.error('Error placing road:', error);
     }
@@ -297,12 +307,81 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameId, accountId, isSetupPhase, 
     );
   };
 
+  const renderSettlement = (vertex: Vertex, isValid: boolean) => {
+    const color = vertex.settlement 
+      ? PLAYER_COLORS[vertex.settlement.playerId] 
+      : isValid 
+        ? 'white'
+        : '#2c3e50';
+
+    // house shape path - centered at vertex position
+    const housePoints = [
+      // roof
+      `M ${vertex.x - SETTLEMENT_SIZE/2} ${vertex.y}`,
+      `L ${vertex.x} ${vertex.y - SETTLEMENT_SIZE/2}`,
+      `L ${vertex.x + SETTLEMENT_SIZE/2} ${vertex.y}`,
+      // walls
+      `L ${vertex.x + SETTLEMENT_SIZE/2} ${vertex.y + SETTLEMENT_SIZE/2}`,
+      `L ${vertex.x - SETTLEMENT_SIZE/2} ${vertex.y + SETTLEMENT_SIZE/2}`,
+      'Z' // close the path
+    ].join(' ');
+
+    return (
+      <g key={vertex.id} 
+         className={isValid ? 'cursor-pointer hover:opacity-80' : ''}
+         onClick={() => handleVertexClick(vertex)}>
+        <path
+          d={housePoints}
+          fill={color}
+          stroke="#2c3e50"
+          strokeWidth="2"
+        />
+      </g>
+    );
+  };
+
+  const renderRoad = (edge: Edge, v1: Vertex, v2: Vertex, isValid: boolean) => {
+    const color = edge.road 
+      ? PLAYER_COLORS[edge.road.playerId]
+      : isValid 
+        ? '#ffd700' // highlight color for valid placement
+        : '#2c3e50';
+
+    // calculate the angle of the road
+    const angle = Math.atan2(v2.y - v1.y, v2.x - v1.x);
+    const length = Math.sqrt(Math.pow(v2.x - v1.x, 2) + Math.pow(v2.y - v1.y, 2));
+    const width = 8;
+
+    // calculate the corners of the rectangle
+    const dx = width * Math.sin(angle) / 2;
+    const dy = -width * Math.cos(angle) / 2;
+
+    const points = [
+      `${v1.x + dx},${v1.y + dy}`,
+      `${v2.x + dx},${v2.y + dy}`,
+      `${v2.x - dx},${v2.y - dy}`,
+      `${v1.x - dx},${v1.y - dy}`
+    ].join(' ');
+
+    return (
+      <g key={edge.id} 
+         className={isValid ? 'cursor-pointer hover:opacity-80' : ''}
+         onClick={() => handleEdgeClick(edge)}>
+        <polygon
+          points={points}
+          fill={color}
+          stroke="#2c3e50"
+          strokeWidth="1"
+        />
+      </g>
+    );
+  };
+
   return (
-    <div className="w-full h-full flex items-center justify-center">
+    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-100/50 to-blue-200/50">
       <svg
         viewBox="0 0 800 700"
-        className="w-full h-full max-w-3xl"
-        style={{ backgroundColor: '#b2ebf2' }}
+        className="w-full h-full max-w-4xl"
       >
         <defs>
           {Object.entries(RESOURCE_IMAGES).map(([type, imagePath]) => {
@@ -368,68 +447,60 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameId, accountId, isSetupPhase, 
           </g>
         ))}
 
-        {/* render edges (roads) */}
+        {/* draw turn indicator */}
+        {isCurrentTurn && showValidPlacements && (
+          <g>
+            <rect
+              x="250"
+              y="10"
+              width="300"
+              height="40"
+              rx="20"
+              className="fill-white/20 backdrop-blur-sm"
+            />
+            <text
+              x="400"
+              y="35"
+              textAnchor="middle"
+              fill={PLAYER_COLORS[accountId]}
+              fontSize="20"
+              fontWeight="bold"
+              className="drop-shadow-sm"
+            >
+              {placementMode === 'road' ? 'Place a Road' : 'Place a Settlement'}
+            </text>
+          </g>
+        )}
+
+        {/* draw roads */}
         {edges.map(edge => {
           const v1 = vertices.find(v => v.id === edge.v1);
           const v2 = vertices.find(v => v.id === edge.v2);
           if (!v1 || !v2) return null;
 
-          return (
-            <line
-              key={edge.id}
-              x1={v1.x}
-              y1={v1.y}
-              x2={v2.x}
-              y2={v2.y}
-              stroke={edge.road ? getPlayerColor(edge.road.playerId) : '#2c3e50'}
-              strokeWidth={edge.road ? 6 : 2}
-              strokeLinecap="round"
-              className={isSetupPhase && isCurrentTurn && placementMode === 'road' 
-                ? 'cursor-pointer hover:stroke-yellow-400' 
-                : ''}
-              onClick={() => handleEdgeClick(edge)}
-            />
-          );
+          const isValidRoadPlacement = isSetupPhase && 
+            isCurrentTurn && 
+            placementMode === 'road' &&
+            !edge.road &&
+            showValidPlacements &&
+            (edge.v1 === selectedVertex || edge.v2 === selectedVertex);
+
+          return renderRoad(edge, v1, v2, isValidRoadPlacement);
         })}
 
-        {/* render vertices (settlements/cities) */}
-        {vertices.map(vertex => (
-          <g key={vertex.id}>
-            <circle
-              cx={vertex.x}
-              cy={vertex.y}
-              r={vertex.building ? 12 : 8}
-              fill={vertex.building 
-                ? getPlayerColor(vertex.building.playerId)
-                : 'white'}
-              stroke="#2c3e50"
-              strokeWidth="2"
-              className={isSetupPhase && isCurrentTurn && !placementMode
-                ? 'cursor-pointer hover:fill-yellow-400'
-                : ''}
-              onClick={() => handleVertexClick(vertex.id)}
-            />
-            {vertex.building?.type === 'city' && (
-              <circle
-                cx={vertex.x}
-                cy={vertex.y}
-                r={6}
-                fill="white"
-                stroke="#2c3e50"
-                strokeWidth="1"
-              />
-            )}
-          </g>
-        ))}
+        {/* draw settlements */}
+        {vertices.map(vertex => {
+          const isValidSettlementPlacement = isSetupPhase && 
+            isCurrentTurn && 
+            placementMode !== 'road' &&
+            !vertex.settlement &&
+            showValidPlacements;
+
+          return renderSettlement(vertex, isValidSettlementPlacement);
+        })}
       </svg>
     </div>
   );
-};
-
-// helper function to get player colors
-const getPlayerColor = (playerId: number): string => {
-  const colors = ['#e74c3c', '#2ecc71', '#3498db', '#f1c40f'];
-  return colors[playerId % colors.length];
 };
 
 export default GameBoard; 
