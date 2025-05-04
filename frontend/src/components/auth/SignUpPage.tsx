@@ -6,6 +6,7 @@ import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 
 const SignUpPage = () => {
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -25,30 +26,30 @@ const SignUpPage = () => {
     }
 
     try {
-      // Create Firebase account
+      // create firebase acct
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const firebaseUid = userCredential.user.uid;
 
-      // Create account in backend
-      const response = await fetch('/api/account', {
+      // add acct details to db
+      const response = await fetch('http://localhost:8080/api/account', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify({
-          username: email,
-          password,
-          firebaseUid
+          username,
+          email
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.text();
+        console.error('Backend error:', errorData);
         throw new Error(errorData || 'Failed to create account');
       }
 
-      // Redirect to sign in page
-      navigate('/signin');
+      // redir to lobby if successful signup
+      navigate('/lobby');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create account');
       setLoading(false);
@@ -81,6 +82,22 @@ const SignUpPage = () => {
               onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-catan-brick/50"
               placeholder="Enter your email"
+              required
+              disabled={loading}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="username" className="text-sm font-medium text-gray-700">
+              Username
+            </label>
+            <input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-catan-brick/50"
+              placeholder="Choose a username"
               required
               disabled={loading}
             />

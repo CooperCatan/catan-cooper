@@ -6,7 +6,7 @@ const HeroSection = () => {
 
   return (
     <section className="relative min-h-screen flex items-center justify-center">
-      {/* Background Image */}
+      {/* hero section black tinted bg */}
       <div 
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{ 
@@ -17,7 +17,7 @@ const HeroSection = () => {
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 to-black/50"></div>
       </div>
 
-      {/* Content */}
+      {/* text overlay */}
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 text-center">
         <div className="space-y-8">
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6">
@@ -26,7 +26,7 @@ const HeroSection = () => {
           </h1>
           <p className="text-lg sm:text-xl text-white max-w-2xl mx-auto mb-8">
             Trade, build, and compete
-            with players from around the world in a modern digital adaptation.
+            with players around the world in Catan.
           </p>
           <div className="flex justify-center gap-4">
             <button

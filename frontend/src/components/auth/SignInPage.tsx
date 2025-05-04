@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 
 const SignInPage = (): ReactElement => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,8 +16,11 @@ const SignInPage = (): ReactElement => {
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, username, password);
-      navigate('/');
+      // firebase sign in
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // redir to game lobby screen upon successful sign up
+      navigate('/lobby');
     } catch (err) {
       setError('Failed to sign in. Please check your credentials.');
       setLoading(false);
@@ -38,12 +41,12 @@ const SignInPage = (): ReactElement => {
             </div>
           )}
           <div className="space-y-2">
-            <label htmlFor="username" className="text-sm font-medium text-gray-700">Email</label>
+            <label htmlFor="email" className="text-sm font-medium text-gray-700">Email</label>
             <input
-              id="username"
+              id="email"
               type="email"
-              value={username}
-              onChange={e => setUsername(e.target.value)}
+              value={email}
+              onChange={e => setEmail(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-catan-brick/50"
               placeholder="Enter your email"
               required

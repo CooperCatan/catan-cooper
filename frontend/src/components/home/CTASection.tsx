@@ -1,40 +1,65 @@
 import React from 'react';
+import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
+
+const CTAContainer = styled.section`
+  padding: 5rem 2rem;
+  background: linear-gradient(135deg,rgb(219, 116, 52),rgb(152, 56, 30));
+  color: white;
+  text-align: center;
+`;
+
+const Content = styled.div`
+  max-width: 600px;
+  margin: 0 auto;
+`;
+
+const Title = styled.h2`
+  font-size: 2.5rem;
+  margin-bottom: 1.5rem;
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 2rem;
+`;
+
+interface ButtonProps {
+  primary?: boolean;
+}
+
+const Button = styled.button<ButtonProps>`
+  padding: 1rem 2rem;
+  border-radius: 4px;
+  border: 2px solid white;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background-color: ${(props: ButtonProps) => props.primary ? 'white' : 'transparent'};
+  color: ${(props: ButtonProps) => props.primary ? '#e67e22' : 'white'};
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+`;
 
 const CTASection = () => {
   const navigate = useNavigate();
 
   return (
-    <section className="py-16 bg-gradient-to-br from-catan-brick to-catan-wood relative overflow-hidden">
-      <div className="absolute inset-0 bg-black/20"></div>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-        <div className="text-center">
-          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
-            Ready to Start Your Journey?
-          </h2>
-          <p className="text-lg sm:text-xl text-white/90 max-w-2xl mx-auto mb-8">
-            Join thousands of players already building their empires in CooperCatan.
-            Your first game is just a click away.
-          </p>
-          <div className="flex flex-col sm:flex-row justify-center gap-4">
-            <button
-              onClick={() => navigate('/signup')}
-              className="bg-white text-catan-brick px-8 py-3 rounded-lg font-medium hover:bg-gray-100 transition-colors"
-            >
-              Create Free Account
-            </button>
-            <button
-              onClick={() => navigate('/signin')}
-              className="bg-transparent text-white border-2 border-white px-8 py-3 rounded-lg font-medium hover:bg-white/10 transition-colors"
-            >
-              Sign In
-            </button>
-          </div>
-        </div>
-      </div>
-      <div className="absolute -bottom-6 -right-6 w-48 h-48 bg-white/10 rounded-full"></div>
-      <div className="absolute -top-6 -left-6 w-32 h-32 bg-white/10 rounded-full"></div>
-    </section>
+    <CTAContainer>
+      <Content>
+        <Title>Ready to Play?</Title>
+        <ButtonGroup>
+          <Button primary onClick={() => navigate('/signup')}>Sign Up</Button>
+          <Button onClick={() => navigate('/signin')}>Sign In</Button>
+        </ButtonGroup>
+      </Content>
+    </CTAContainer>
   );
 };
 
