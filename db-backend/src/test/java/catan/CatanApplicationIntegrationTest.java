@@ -43,16 +43,16 @@ class CatanApplicationIntegrationTest {
     @MockBean
     private ResultSet resultSet;
 
+    // executes before mockitos 
     @BeforeEach
     void setUp() throws Exception {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
         
-        // Setup common mock behaviors
         when(dcm.getConnection()).thenReturn(connection);
         when(connection.prepareStatement(anyString())).thenReturn(preparedStatement);
         when(preparedStatement.executeQuery()).thenReturn(resultSet);
         
-        // Mock successful account creation
+        // mock successful account creation to test downstream
         when(resultSet.next()).thenReturn(true);
         when(resultSet.getLong("account_id")).thenReturn(1L);
         when(resultSet.getString("username")).thenReturn("testUser");
@@ -67,13 +67,13 @@ class CatanApplicationIntegrationTest {
     void testCreateAccount() throws Exception {
         when(preparedStatement.execute()).thenReturn(true);
 
-        // Test valid request
+        // test request validity 
         mockMvc.perform(post("/api/account")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"username\":\"testUser\",\"email\":\"test@example.com\"}"))
                 .andExpect(status().isOk());
 
-        // Test invalid request (missing username)
+        // test missing username
         mockMvc.perform(post("/api/account")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"test@example.com\"}"))
@@ -119,11 +119,11 @@ class CatanApplicationIntegrationTest {
     void testRecordWinAndLoss() throws Exception {
         when(preparedStatement.execute()).thenReturn(true);
 
-        // Test recording a win
+        // test recording win through api
         mockMvc.perform(post("/api/account/1/win"))
                 .andExpect(status().isOk());
 
-        // Test recording a loss
+        // test recording loss through api
         mockMvc.perform(post("/api/account/1/loss"))
                 .andExpect(status().isOk());
     }
