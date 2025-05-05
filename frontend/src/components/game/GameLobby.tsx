@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth, signOut } from 'firebase/auth';
+import { PLAYER_COLORS } from './GameBoard';
+import { XCircle, Home, Settings } from 'lucide-react';
+import { useAuth } from '../auth/AuthProvider';
 
 interface Game {
   gameId: number;
@@ -19,23 +22,21 @@ interface Account {
   elo: number;
 }
 
+const cn = (...classes: string[]) => classes.filter(Boolean).join(' ');
+
 const GameLobby = () => {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [account, setAccount] = useState<Account | null>(null);
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
   const auth = getAuth();
 
   useEffect(() => {
     const loadUserData = async () => {
-      const user = auth.currentUser;
-      if (!user) {
-        console.log('No user found, redirecting to signin');
-        navigate('/signin');
+      if (!currentUser) {
         return;
       }
-
-      console.log('Current user email:', user.email);
 
       try {
         const response = await fetch('http://localhost:8080/api/accounts', {
@@ -52,15 +53,10 @@ const GameLobby = () => {
         }
 
         const accounts: Account[] = await response.json();
-        console.log('Fetched accounts:', accounts);
-        
-        const userAccount = accounts.find(acc => acc.email === user.email);
-        console.log('Found user account:', userAccount);
+        const userAccount = accounts.find(acc => acc.email === currentUser.email);
         
         if (userAccount) {
           setAccount(userAccount);
-        } else {
-          console.log('No matching account found for email:', user.email);
         }
       } catch (error) {
         console.error('Error fetching user account:', error);
@@ -89,7 +85,7 @@ const GameLobby = () => {
     ];
     setGames(syntheticGames);
     setLoading(false);
-  }, [auth, navigate]);
+  }, [currentUser]);
 
   const handleSignOut = async () => {
     try {
@@ -121,78 +117,111 @@ const GameLobby = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-catan-brick">Game Lobby</h1>
-          <div className="flex items-center space-x-4">
+    <div className="h-screen w-screen bg-gradient-to-br from-blue-50 to-blue-100 flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="w-full bg-white/10 backdrop-blur-sm border-b border-white/20">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-gray-700/90 text-sm font-medium rounded-xl hover:bg-white/30 transition-all shadow-lg hover:shadow-xl border border-white/20"
+            >
+              <Home size={16} />
+              <span>Home</span>
+            </button>
+            <h1 className="text-2xl font-bold text-gray-800/90">Game Lobby</h1>
+          </div>
+          <div className="flex items-center gap-4">
             {account && (
-              <span className="text-gray-600">
-                Welcome, <span className="font-medium">{account.username}</span>
-              </span>
+              <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20">
+                <span className="text-gray-700/90 font-medium">{account.username}</span>
+                <span className="text-sm text-gray-600/90">ELO {account.elo}</span>
+              </div>
             )}
             <button
-              onClick={handleSignOut}
-              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+              onClick={() => navigate('/settings')}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-gray-700/90 text-sm font-medium rounded-xl hover:bg-white/30 transition-all shadow-lg hover:shadow-xl border border-white/20"
             >
-              Sign Out
+              <Settings size={16} />
+              <span>Settings</span>
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-red-600 text-sm font-medium rounded-xl hover:bg-red-50/50 transition-all shadow-lg hover:shadow-xl border border-red-200/50"
+            >
+              <XCircle size={16} />
+              <span>Sign Out</span>
             </button>
           </div>
         </div>
-      </nav>
+      </div>
 
-      <div className="max-w-6xl mx-auto p-8">
-        <div className="mb-8">
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
           <button
             onClick={handleCreateGame}
-            className="px-6 py-3 bg-catan-brick text-white rounded-lg hover:bg-catan-brick/90 transition-colors"
+            className="px-6 py-3 bg-white/20 backdrop-blur-sm text-gray-800/90 font-medium rounded-xl hover:bg-white/30 transition-all shadow-lg hover:shadow-xl border border-white/20"
           >
             Create New Game
           </button>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {games.map((game) => (
-            <div
-              key={game.gameId}
-              className="bg-white rounded-xl shadow-md p-6 space-y-4"
-            >
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold">Game #{game.gameId}</h3>
-                <span className={`px-3 py-1 rounded-full text-sm ${
-                  game.status === 'waiting' ? 'bg-green-100 text-green-800' :
-                  game.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {game.status.replace('_', ' ')}
-                </span>
-              </div>
-
-              <div>
-                <h4 className="text-sm font-medium text-gray-500">Players</h4>
-                <ul className="mt-1 space-y-1">
-                  {game.players.map((player, index) => (
-                    <li key={index} className="text-sm text-gray-700">{player}</li>
-                  ))}
-                </ul>
-              </div>
-
-              {game.winner && (
-                <div className="text-sm text-gray-600">
-                  Winner: <span className="font-medium">{game.winner}</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {games.map((game) => (
+              <div
+                key={game.gameId}
+                className="relative bg-white/20 backdrop-blur-sm rounded-xl p-6 space-y-4 border border-white/20 shadow-lg hover:shadow-xl transition-all"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xl font-bold text-gray-800/90">Game #{game.gameId}</h3>
+                  <div className={cn(
+                    "px-3 py-1 text-sm font-medium rounded-full backdrop-blur-sm border",
+                    game.status === 'waiting' ? "bg-green-100/50 text-green-700/90 border-green-200/50" :
+                    game.status === 'in_progress' ? "bg-yellow-100/50 text-yellow-700/90 border-yellow-200/50" :
+                    "bg-gray-100/50 text-gray-700/90 border-gray-200/50"
+                  )}>
+                    {game.status === 'waiting' ? 'Waiting' :
+                     game.status === 'in_progress' ? 'In Progress' :
+                     'Completed'}
+                  </div>
                 </div>
-              )}
 
-              {game.status === 'waiting' && (
-                <button
-                  onClick={() => handleJoinGame(game.gameId)}
-                  className="w-full px-4 py-2 bg-catan-brick text-white rounded-lg hover:bg-catan-brick/90 transition-colors"
-                >
-                  Join Game
-                </button>
-              )}
-            </div>
-          ))}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-gray-600/90">Players</h4>
+                  <div className="space-y-2">
+                    {game.players.map((player, index) => (
+                      <div 
+                        key={index}
+                        className="flex items-center gap-2 px-3 py-2 bg-white/10 rounded-lg border border-white/10"
+                      >
+                        <div 
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: PLAYER_COLORS[index + 1] }}
+                        />
+                        <span className="text-sm text-gray-700/90">{player}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {game.winner && (
+                  <div className="flex items-center gap-2 mt-4">
+                    <span className="text-sm text-gray-600/90">Winner:</span>
+                    <span className="text-sm font-medium text-gray-800/90">{game.winner}</span>
+                  </div>
+                )}
+
+                {game.status === 'waiting' && (
+                  <button
+                    onClick={() => handleJoinGame(game.gameId)}
+                    className="w-full mt-4 px-4 py-2 bg-white/20 backdrop-blur-sm text-gray-800/90 font-medium rounded-xl hover:bg-white/30 transition-all shadow-lg hover:shadow-xl border border-white/20"
+                  >
+                    Join Game
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
