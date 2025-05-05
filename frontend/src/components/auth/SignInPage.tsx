@@ -1,82 +1,102 @@
-import React, { ReactElement, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { Home, ArrowRight } from 'lucide-react';
 
-const SignInPage = (): ReactElement => {
+const SignInPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const auth = getAuth();
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setLoading(true);
+    setError(null);
 
     try {
-      // firebase sign in
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-      // redir to game lobby screen upon successful sign up
+      await signInWithEmailAndPassword(auth, email, password);
       navigate('/lobby');
-    } catch (err) {
-      setError('Failed to sign in. Please check your credentials.');
-      setLoading(false);
+    } catch (error: any) {
+      console.error('Error signing in:', error);
+      setError(error.message);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-catan-brick/90 to-catan-wood flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 space-y-6">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-catan-brick mb-2">Welcome Back</h1>
-          <p className="text-gray-600">Sign in to continue your journey in Catan</p>
+    <div className="h-screen w-screen bg-gradient-to-br from-blue-50 to-blue-100 flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="w-full bg-white/10 backdrop-blur-sm border-b border-white/20">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-gray-700/90 text-sm font-medium rounded-xl hover:bg-white/30 transition-all shadow-lg hover:shadow-xl border border-white/20"
+            >
+              <Home size={16} />
+              <span>Home</span>
+            </button>
+            <h1 className="text-2xl font-bold text-gray-800/90">Sign In</h1>
+          </div>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="w-full max-w-md space-y-6">
           {error && (
-            <div className="p-3 text-sm text-red-500 bg-red-100 rounded-lg">
+            <div className="p-4 bg-red-100/50 backdrop-blur-sm border border-red-200/50 rounded-xl text-red-600 text-sm">
               {error}
             </div>
           )}
-          <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium text-gray-700">Email</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-catan-brick/50"
-              placeholder="Enter your email"
-              required
-              disabled={loading}
-            />
+
+          <div className="bg-white/20 backdrop-blur-sm rounded-xl p-8 border border-white/20 shadow-xl">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700/90 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-2 bg-white/50 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700/90 mb-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-2 bg-white/50 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-gray-800/90 font-medium rounded-xl hover:bg-white/30 transition-all shadow-lg hover:shadow-xl border border-white/20"
+              >
+                <span>Sign In</span>
+                <ArrowRight size={16} />
+              </button>
+            </form>
+
+            <div className="mt-6 text-center">
+              <p className="text-sm text-gray-600/90">
+                Don't have an account?{' '}
+                <button
+                  onClick={() => navigate('/signup')}
+                  className="text-blue-600/90 hover:text-blue-700/90 font-medium"
+                >
+                  Sign Up
+                </button>
+              </p>
+            </div>
           </div>
-          <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium text-gray-700">Password</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-catan-brick/50"
-              placeholder="Enter your password"
-              required
-              disabled={loading}
-            />
-          </div>
-          <button
-            type="submit"
-            className="w-full bg-catan-brick text-white py-2 px-4 rounded-lg hover:bg-catan-brick/90 transition-colors disabled:opacity-50"
-            disabled={loading}
-          >
-            {loading ? 'Signing In...' : 'Sign In'}
-          </button>
-        </form>
-        <div className="text-center text-sm text-gray-600">
-          Don't have an account?{' '}
-          <a href="/signup" className="text-catan-brick hover:text-catan-brick/80">Sign up</a>
         </div>
       </div>
     </div>

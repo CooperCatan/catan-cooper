@@ -234,13 +234,6 @@ const GameRoom: React.FC = () => {
         <div className="absolute inset-0">
           <div className="text-center py-4 bg-white/10 backdrop-blur-sm border-b border-white/20">
             <h2 className="text-2xl font-bold text-gray-800/90">Game #{gameId}</h2>
-            <div className="text-lg font-medium text-gray-700/90 mt-1">
-              {countdown > 0 
-                ? `Starting in ${countdown}s`
-                : isSetupPhase 
-                  ? "Setup Phase"
-                  : "Game in Progress"}
-            </div>
           </div>
           <div className="w-full h-[calc(100%-80px)]">
             <GameBoard 
@@ -257,9 +250,6 @@ const GameRoom: React.FC = () => {
       <div className="w-96 bg-white/10 backdrop-blur-sm border-l border-white/20 p-6 overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-800/90">Players</h2>
-          <div className="px-3 py-1 bg-blue-100/50 backdrop-blur-sm text-blue-700/90 text-sm font-medium rounded-full border border-blue-200/50">
-            {countdown > 0 ? `Starting in ${countdown}s` : 'Setup Phase'}
-          </div>
         </div>
         <div className="space-y-4">
           {players.map(player => (
