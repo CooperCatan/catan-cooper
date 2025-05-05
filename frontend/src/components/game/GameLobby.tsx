@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth, signOut } from 'firebase/auth';
 import { PLAYER_COLORS } from './GameBoard';
-import { XCircle, Home, Settings } from 'lucide-react';
+import { XCircle, Home, Settings, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
 
 interface Game {
   gameId: number;
+  gameName: string;
   players: string[];
   status: 'waiting' | 'in_progress' | 'completed';
   winner?: string;
@@ -28,6 +29,8 @@ const GameLobby = () => {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [account, setAccount] = useState<Account | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newGameName, setNewGameName] = useState('');
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const auth = getAuth();
@@ -68,16 +71,19 @@ const GameLobby = () => {
     const syntheticGames: Game[] = [
       {
         gameId: 1,
+        gameName: "Player1's Game",
         players: ['Player1', 'Player2', 'Player3'],
         status: 'in_progress'
       },
       {
         gameId: 2,
+        gameName: "Player4's Game",
         players: ['Player4', 'Player5'],
         status: 'waiting'
       },
       {
         gameId: 3,
+        gameName: "Player6's Game",
         players: ['Player6', 'Player7', 'Player8', 'Player9'],
         status: 'completed',
         winner: 'Player7'
@@ -97,13 +103,26 @@ const GameLobby = () => {
   };
 
   const handleJoinGame = (gameId: number) => {
-    // nav to gameroom with gameId 
     navigate(`/game/${gameId}`);
   };
 
   const handleCreateGame = () => {
-    // TODO: Implement shuffled game board creation logic so each lobby is unique 
-    console.log('Creating new game');
+    setIsCreateModalOpen(true);
+  };
+
+  const handleCreateGameSubmit = () => {
+    if (!newGameName.trim()) return;
+
+    const newGame: Game = {
+      gameId: Math.max(0, ...games.map(g => g.gameId)) + 1,
+      gameName: newGameName,
+      players: [currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Anonymous'],
+      status: 'waiting'
+    };
+
+    setGames(prevGames => [...prevGames, newGame]);
+    setNewGameName('');
+    setIsCreateModalOpen(false);
   };
 
   if (loading) {
@@ -173,7 +192,10 @@ const GameLobby = () => {
                 className="relative bg-white/20 backdrop-blur-sm rounded-xl p-6 space-y-4 border border-white/20 shadow-lg hover:shadow-xl transition-all"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xl font-bold text-gray-800/90">Game #{game.gameId}</h3>
+                  <div className="space-y-1">
+                    <h3 className="text-xl font-bold text-gray-800/90">Game #{game.gameId}</h3>
+                    <p className="text-sm text-gray-600/90">{game.gameName}</p>
+                  </div>
                   <div className={cn(
                     "px-3 py-1 text-sm font-medium rounded-full backdrop-blur-sm border",
                     game.status === 'waiting' ? "bg-green-100/50 text-green-700/90 border-green-200/50" :
@@ -224,6 +246,53 @@ const GameLobby = () => {
           </div>
         </div>
       </div>
+
+      {/* Create Game Modal */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Create New Game</h2>
+              <button
+                onClick={() => setIsCreateModalOpen(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="gameName" className="block text-sm font-medium text-gray-700 mb-1">
+                  Game Name
+                </label>
+                <input
+                  type="text"
+                  id="gameName"
+                  value={newGameName}
+                  onChange={(e) => setNewGameName(e.target.value)}
+                  placeholder="Enter game name..."
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setIsCreateModalOpen(false)}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateGameSubmit}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                  disabled={!newGameName.trim()}
+                >
+                  Create Game
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
