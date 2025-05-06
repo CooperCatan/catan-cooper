@@ -21,7 +21,7 @@ public class CatanApplication {
 
 	private final DatabaseConnectionManager dcm = new DatabaseConnectionManager("db",
 			"catan", "postgres", "password");
-
+	// is it fine for this endpoint to be publicly exposed like this? also need to add an id to acct
 	@PostMapping("/api/account")
 	public ResponseEntity<?> createAccount(@RequestBody Map<String, String> accountData) {
 		if (accountData == null) {
@@ -99,6 +99,7 @@ public class CatanApplication {
 		}
 	}
 
+	// this endpoint is not being used, use for frontend to populate accounts array on frontend
 	@GetMapping("/api/account/{id}")
 	public ResponseEntity<Account> getAccountById(@PathVariable("id") long id) {
 		try (Connection connection = dcm.getConnection()) {
@@ -115,6 +116,7 @@ public class CatanApplication {
 		}
 	}
 
+	// unused for now
 	@PatchMapping("/api/account/{id}/username")
 	public ResponseEntity<Account> updateUsername(@PathVariable("id") long id, @RequestBody Map<String, String> data) {
 		try (Connection connection = dcm.getConnection()) {
@@ -130,6 +132,9 @@ public class CatanApplication {
 			return ResponseEntity.internalServerError().build();
 		}
 	}
+
+	// i don't think this needs to be an api endpoint actually, wouldn't want this logic publicly exposed at all
+	// game end should just modify the account object through its DAO
 
 	@PatchMapping("/api/account/{id}/elo")
 	public ResponseEntity<Account> updateElo(@PathVariable("id") long id, @RequestBody Map<String, Long> data) {
@@ -147,6 +152,7 @@ public class CatanApplication {
 		}
 	}
 
+	// unused right now
 	@DeleteMapping("/api/account/{id}")
 	public ResponseEntity<Map<String, Boolean>> deleteAccount(@PathVariable("id") long id) {
 		try (Connection connection = dcm.getConnection()) {
@@ -159,6 +165,8 @@ public class CatanApplication {
 				.body(Map.of("deleted", false));
 		}
 	}
+
+	// i don't think this endpoint should exist. 
 
 	@PostMapping("/api/account/{id}/win")
 	public ResponseEntity<?> recordWin(@PathVariable("id") long id) {
@@ -177,6 +185,7 @@ public class CatanApplication {
 		}
 	}
 
+	// same with this, i don't think this endpoint needs to exist.
 	@PostMapping("/api/account/{id}/loss")
 	public ResponseEntity<?> recordLoss(@PathVariable("id") long id) {
 		try (Connection connection = dcm.getConnection()) {
@@ -194,6 +203,7 @@ public class CatanApplication {
 		}
 	}
 
+	// unused
 	@PostMapping("/api/games")
 	public ResponseEntity<Object> createGame() {
 		try (Connection connection = dcm.getConnection()) {
@@ -242,7 +252,7 @@ public class CatanApplication {
 				));
 		}
 	}
-
+	// unused 
 	@GetMapping("/api/games/{gameId}/longest-road")
 	public ResponseEntity<Map<String, Object>> getLongestRoadHolder(@PathVariable long gameId) {
 		try (Connection connection = dcm.getConnection()) {
@@ -265,6 +275,7 @@ public class CatanApplication {
 		}
 	}
 
+	// unused
 	@GetMapping("/api/games/{gameId}/largest-army")
 	public ResponseEntity<Map<String, Object>> getLargestArmyHolder(@PathVariable long gameId) {
 		try (Connection connection = dcm.getConnection()) {
@@ -287,6 +298,7 @@ public class CatanApplication {
 		}
 	}
 
+	// unused
 	@DeleteMapping("/api/games/{gameId}")
 	public ResponseEntity<Map<String, Boolean>> deleteGame(@PathVariable long gameId) {
 		try (Connection connection = dcm.getConnection()) {
@@ -300,6 +312,7 @@ public class CatanApplication {
 		}
 	}
 
+	// unused
 	@PostMapping("/api/games/{gameId}/players/{accountId}/hand")
 	public ResponseEntity<Object> createPlayerHand(
 			@PathVariable long gameId,
@@ -361,6 +374,7 @@ public class CatanApplication {
 		}
 	}
 
+	// unused
 	@GetMapping("/api/games/{gameId}/players/{accountId}/resources")
 	public ResponseEntity<Map<String, Object>> checkResources(
 			@PathVariable long gameId,
@@ -382,6 +396,7 @@ public class CatanApplication {
 		}
 	}
 
+	// unused
 	@PostMapping("/api/games/{gameId}/players/{accountId}/gain")
 	public ResponseEntity<Object> gainResources(
 			@PathVariable long gameId,
@@ -451,6 +466,7 @@ public class CatanApplication {
 		}
 	}
 
+	// unused
 	@PostMapping("/api/games/{gameId}/players/{accountId}/robber")
 	public ResponseEntity<PlayerState> robberLoss(
 			@PathVariable long gameId,
@@ -470,6 +486,7 @@ public class CatanApplication {
 		}
 	}
 
+	// unused
 	@DeleteMapping("/api/games/{gameId}/players/{accountId}/hand")
 	public ResponseEntity<Map<String, Boolean>> deletePlayerHand(
 			@PathVariable long gameId,
@@ -485,7 +502,7 @@ public class CatanApplication {
 				.body(Map.of("deleted", false));
 		}
 	}
-
+	// there is no need to have an api endpoint that returns all accts in the db
 	@GetMapping("/api/accounts")
 	@CrossOrigin(origins = {"http://localhost:3000"}, allowCredentials = "true")
 	public ResponseEntity<?> getAllAccounts() {
