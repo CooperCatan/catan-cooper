@@ -18,13 +18,3 @@ VALUES
 (2, 1, 1, 1, 2, 1, 3, 2, 0, 0, 1, 2),
 (3, 1, 1, 3, 1, 2, 1, 1, 0, 1, 2, 2),
 (4, 1, 1, 1, 3, 1, 2, 2, 0, 0, 1, 3);
-
-INSERT INTO trade (trade_id, game_id, turn_number, from_player_id, to_player_id, given_resource, given_amount, received_resource, received_amount, is_accepted)
-VALUES
-(1, 1, 1, 1, 2, 'wood', 2, 'brick', 1, TRUE),
-(2, 1, 1, 3, 4, 'ore', 1, 'sheep', 2, FALSE);
-
-INSERT INTO game_action (game_id, turn_number, action_type)
-VALUES
-(1, 1, 'ROLL_DICE'),
-(2, 1, 'BUILD_SETTLEMENT');

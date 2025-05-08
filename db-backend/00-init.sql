@@ -75,28 +75,3 @@ CREATE TABLE player_state (
     FOREIGN KEY (account_id) REFERENCES account (account_id),
     FOREIGN KEY (game_id, turn_number) REFERENCES game_state (game_id, turn_number)
 );
-
-CREATE TABLE trade (
-    trade_id          bigint DEFAULT nextval('trade_id_seq'),
-    game_id           bigint,
-    turn_number       bigint,
-    from_player_id    bigint,
-    to_player_id      bigint,
-    given_resource    varchar(255),
-    given_amount      bigint,
-    received_resource varchar(255),
-    received_amount   bigint,
-    is_accepted       boolean DEFAULT FALSE,
-    PRIMARY KEY (trade_id),
-    FOREIGN KEY (game_id, turn_number) REFERENCES game_state (game_id, turn_number),
-    FOREIGN KEY (from_player_id) REFERENCES account (account_id),
-    FOREIGN KEY (to_player_id) REFERENCES account (account_id)
-);
-
-CREATE TABLE game_action (
-    game_id     bigint,
-    turn_number bigint,
-    action_type varchar(255),
-    PRIMARY KEY (game_id, turn_number),
-    FOREIGN KEY (game_id, turn_number) REFERENCES game_state (game_id, turn_number)
-);
