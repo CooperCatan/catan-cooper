@@ -309,12 +309,6 @@ public class GameState implements DataTransferObject {
         return selectedCard;
     }
 
-    public void incrementTurn() {
-        this.turnNumber++;
-        this.rollDice();
-        return;
-    }
-
     public boolean placeCity(int v, Long accountId) {
         Gson gson = new Gson();
         List<Hex> hexes = this.deserialize(this.jsonHexes, this.jsonVertices, this.jsonEdges, gson);
@@ -335,7 +329,7 @@ public class GameState implements DataTransferObject {
         return false;
     }
 
-    public boolean placeSettlement(int v, Long accountId) {
+    public boolean placeSettlement(int v, Long accountId, boolean free) {
         Gson gson = new Gson();
         List<Hex> hexes = this.deserialize(this.jsonHexes, this.jsonVertices, this.jsonEdges, gson);
         //Look for the right vertex in the deserialized board
@@ -348,7 +342,7 @@ public class GameState implements DataTransferObject {
                             validRoad = true;
                         }
                     }
-                    if(!validRoad) {
+                    if(!validRoad && !free) {
                         return false;
                     }
                     boolean noneAdjacent = true;
@@ -420,7 +414,7 @@ public class GameState implements DataTransferObject {
         }
 
         boolean hasConnection = false;
-        //Check if player has a building at either vertex, this helps with first turn stuff
+        //Check if the player has a building at either vertex, this helps with first turn stuff
         if(vertex1.getPlayerId() == accountId || vertex2.getPlayerId() == accountId) {
             hasConnection = true;
         }
@@ -442,7 +436,7 @@ public class GameState implements DataTransferObject {
             }
         }
 
-        //Invalid Road placement, can't be conncected to road
+        //Invalid Road placement, Road can't be conncected to road/settlement
         if(!hasConnection) {
             return false;
         }
@@ -520,6 +514,165 @@ public class GameState implements DataTransferObject {
             }
         }
         return roll;
+    }
+
+    public void purchaseSettlement(int v, long accountId) {
+        PlayerState playerState = playerStateDAO.findById(accountId);
+        if (playerState == null) {
+            System.err.println("PlayerState not found for accountId: " + accountId);
+            return;
+        }
+        if(playerState.checkSettlement() && this.placeSettlement(v, accountId, false)) {
+            playerState.paySettlement();
+            playerState.setNumSettlements(playerState.getNumSettlements() + 1);
+        }
+        playerStateDAO.update(playerState);
+    }
+
+    public void freeSettlement(int v, long accountId) {
+        //This function is purely for game-start logic.
+        placeSettlement(v, accountId, true);
+    }
+
+    public void purchaseCity(int v, long accountId) {
+        PlayerState playerState = playerStateDAO.findById(accountId);
+        if (playerState == null) {
+            System.err.println("PlayerState not found for accountId: " + accountId);
+            return;
+        }
+        if(playerState.checkCity() && this.placeCity(v, accountId)) {
+            playerState.payCity();
+            playerState.setNumCities(playerState.getNumCities() + 1);
+        }
+        playerStateDAO.update(playerState);
+    }
+
+    public void purchaseRoad(int v1, int v2, long accountId) {
+        PlayerState playerState = playerStateDAO.findById(accountId);
+        if (playerState == null) {
+            System.err.println("PlayerState not found for accountId: " + accountId);
+            return;
+        }
+        if(playerState.checkRoad() && this.placeRoad(v1, v2, accountId)) {
+            playerState.payRoad();
+            playerState.setNumRoads(playerState.getNumRoads() + 1);
+        }
+        playerStateDAO.update(playerState);
+    }
+
+    public void freeRoad(int v1, int v2, long accountId) {
+        //This function is purely for game-start logic.
+        PlayerState playerState = playerStateDAO.findById(accountId);
+        if (playerState == null) {
+            System.err.println("PlayerState not found for accountId: " + accountId);
+            return;
+        }
+        if(placeRoad(v1, v2, accountId)) {
+            playerState.setNumRoads(playerState.getNumRoads() + 1);
+        }
+        playerStateDAO.update(playerState);
+    }
+
+    public void purchaseCard(long accountId) {
+        PlayerState playerState = playerStateDAO.findById(accountId);
+        if (playerState == null) {
+            System.err.println("PlayerState not found for accountId: " + accountId);
+            return;
+        }
+        //Check if the player can pay for the card
+        if (playerState.checkCard()) {
+            //Check if the bank still has cards
+            int card = getCard();
+            if (card != 0) {
+                //Pay for the card
+                playerState.payCard();
+                switch (card) {
+                    case 1:
+                        playerState.setKnight(playerState.getKnight() + 1);
+                        setBankKnight(getBankKnight() - 1);
+                        break;
+                    case 2:
+                        playerState.setMonopoly(playerState.getMonopoly() + 1);
+                        setBankMonopoly(getBankMonopoly() - 1);
+                        break;
+                    case 3:
+                        playerState.setYearOfPlenty(playerState.getYearOfPlenty() + 1);
+                        setBankYearOfPlenty(getBankYearOfPlenty() - 1);
+                        break;
+                    case 4:
+                        playerState.setVictoryPoint(playerState.getVictoryPoint() + 1);
+                        setBankVictoryPoint(getBankVictoryPoint() - 1);
+                        break;
+                    case 5:
+                        playerState.setRoadBuilding(playerState.getRoadBuilding() + 1);
+                        setBankRoadBuilding(getBankRoadBuilding() - 1);
+                        break;
+                    default:
+                        System.err.println("Invalid card: " + card);
+                        return;
+                }
+            }
+        }
+        playerStateDAO.update(playerState);
+    }
+
+    public void useCard(int card, long accountId) {
+        PlayerState playerState = playerStateDAO.findById(accountId);
+        if (playerState == null) {
+            System.err.println("PlayerState not found for accountId: " + accountId);
+            return;
+        }
+        switch (card) {
+            case 1:
+                if (playerState.getKnight() > 0) {
+                    //TODO - Update playerState usedKnights, do robber mechanics
+                    playerState.setKnight(playerState.getKnight() - 1);
+                    playerState.setKnightUsed(playerState.getKnightUsed() + 1);
+                }
+                break;
+            case 2:
+                if (playerState.getMonopoly() > 0) {
+                    //TODO - Loop through each players hand given resource and take all the stuff
+                }
+                break;
+            case 3:
+                if (playerState.getYearOfPlenty() > 0) {
+                    //TODO - Given 2 resources, add one of each
+                }
+                break;
+            case 5:
+                if(playerState.getRoadBuilding() > 0) {
+                    //TODO - Given 2 edge segments, run freeRoad() on each
+                }
+                break;
+            default:
+                System.err.println("Invalid card usage: " + card);
+                return;
+        }
+        playerStateDAO.update(playerState);
+    }
+
+    public void endTurn(long accountId) {
+        this.turnNumber++;
+        //Update vps for turn ending player (since they're the only one capable of acting on their turn)
+        PlayerState playerState = playerStateDAO.findById(accountId);
+        if (playerState == null) {
+            System.err.println("PlayerState not found for accountId: " + accountId);
+            return;
+        }
+        //Biggest army conditions
+        if(playerState.getKnightUsed() > 0 && playerState.getKnightUsed() >= 3) {
+            //TODO - Figure out checking against peers
+        }
+        //Modified longest road conditions
+        if(playerState.getNumRoads() > 6) {
+            //TODO - Figure out checking against peers
+        }
+        long vpSum = playerState.getNumSettlements() + 2 * playerState.getNumCities() + playerState.getVictoryPoint() + 2 * playerState.isLongestRoad() + 2 * playerState.isLargestArmy();
+        if(vpSum >= 10) {
+            setWinnerId(accountId);
+        }
+        this.rollDice();
     }
 
     public String getJsonHexes() {

@@ -69,8 +69,8 @@ CREATE TABLE player_state (
     num_roads                   bigint  DEFAULT 0,
     num_cities                  bigint  DEFAULT 0,
     num_longest_continuous_road bigint  DEFAULT 0,
-    largest_army                boolean DEFAULT FALSE,
-    longest_road                boolean DEFAULT FALSE,
+    largest_army                bigint DEFAULT 0,
+    longest_road                bigint DEFAULT 0,
     PRIMARY KEY (account_id, game_id, turn_number),
     FOREIGN KEY (account_id) REFERENCES account (account_id),
     FOREIGN KEY (game_id, turn_number) REFERENCES game_state (game_id, turn_number)

@@ -21,8 +21,8 @@ public class PlayerState implements DataTransferObject {
     private long numRoads;
     private long numCities;
     private long numLongestContinuousRoad;
-    private boolean largestArmy;
-    private boolean longestRoad;
+    private long largestArmy;
+    private long longestRoad;
 
     @Override
     public long getId() {
@@ -83,85 +83,57 @@ public class PlayerState implements DataTransferObject {
     public long getNumLongestContinuousRoad() { return numLongestContinuousRoad; }
     public void setNumLongestContinuousRoad(long numLongestContinuousRoad) { this.numLongestContinuousRoad = numLongestContinuousRoad; }
 
-    public boolean isLargestArmy() { return largestArmy; }
-    public void setLargestArmy(boolean largestArmy) { this.largestArmy = largestArmy; }
+    public long isLargestArmy() { return largestArmy; }
+    public void setLargestArmy(long largestArmy) { this.largestArmy = largestArmy; }
 
-    public boolean isLongestRoad() { return longestRoad; }
-    public void setLongestRoad(boolean longestRoad) { this.longestRoad = longestRoad; }
+    public long isLongestRoad() { return longestRoad; }
+    public void setLongestRoad(long longestRoad) { this.longestRoad = longestRoad; }
 
-    public boolean paySettlement() {
-        //Check if the resources for a Settlement can be subtracted, if they can then do so and return true
-        if(this.getBrick() >= 1 && this.getSheep() >= 1 && this.getWheat() >= 1 && this.getWood() >= 1) {
-            this.setWheat(this.getWheat() - 1);
-            this.setBrick(this.getBrick() - 1);
-            this.setSheep(this.getSheep() - 1);
-            this.setWood(this.getWood() - 1);
-            return true;
-        } else {
-            return false;
-        }
+    public boolean checkSettlement() {
+        //Check if the resources for a Settlement can be subtracted
+        return this.getBrick() >= 1 && this.getSheep() >= 1 && this.getWheat() >= 1 && this.getWood() >= 1;
     }
 
-    public void refundSettlement() {
-        //On invalid Settlement placement
-        this.setWheat(this.getWheat() + 1);
-        this.setBrick(this.getBrick() + 1);
-        this.setSheep(this.getSheep() + 1);
-        this.setWood(this.getWood() + 1);
+    public void paySettlement() {
+        //On valid Settlement placement
+        this.setWheat(this.getWheat() - 1);
+        this.setBrick(this.getBrick() - 1);
+        this.setSheep(this.getSheep() - 1);
+        this.setWood(this.getWood() - 1);
     }
 
-    public boolean payCity() {
-        //Check if the resources for a City can be subtracted, if they can then do so and return true
-        if(this.getOre() >= 3 && this.getWheat() >= 2) {
-            this.setOre(this.getOre() - 3);
-            this.setWheat(this.getWheat() - 2);
-            return true;
-        } else {
-            return false;
-        }
+    public boolean checkCity() {
+        //Check if the resources for a City can be subtracted
+        return this.getOre() >= 3 && this.getWheat() >= 2;
     }
 
-    public void refundCity() {
-        //On invalid City placement
-        this.setOre(this.getOre() + 3);
-        this.setWheat(this.getWheat() + 2);
+    public void payCity() {
+        //On valid City placement
+        this.setOre(this.getOre() - 3);
+        this.setWheat(this.getWheat() - 2);
     }
 
-    public boolean payRoad() {
-        //Check if the resources for a Road can be subtracted, if they can then do so and return true
-        if(this.getBrick() >= 1 && this.getWood() >= 1) {
-            this.setBrick(this.getBrick() - 1);
-            this.setWood(this.getWood() - 1);
-            return true;
-        } else {
-            return false;
-        }
+    public boolean checkRoad() {
+        //Check if the resources for a Road can be subtracted
+        return this.getBrick() >= 1 && this.getWood() >= 1;
     }
 
-    public void refundRoad() {
-        //On invalid road placement
-        this.setBrick(this.getBrick() + 1);
-        this.setWood(this.getWood() + 1);
+    public void payRoad() {
+        //On valid road placement
+        this.setBrick(this.getBrick() - 1);
+        this.setWood(this.getWood() - 1);
     }
 
-    public boolean payCard() {
-        //Check if the resources for a card can be subtracted, if they can then do so and return true
-        if(this.getOre() >= 1 && this.getSheep() >= 1 && this.getWheat() >= 1) {
-            this.setWheat(this.getWheat() - 1);
-            this.setOre(this.getOre() - 1);
-            this.setSheep(this.getSheep() - 1);
-            return true;
-        } else {
-            return false;
-        }
+    public boolean checkCard() {
+        //Check if the resources for a card can be subtracted
+        return this.getOre() >= 1 && this.getSheep() >= 1 && this.getWheat() >= 1;
     }
 
-    public void refundCard() {
-        //This function is called when no Cards can be drawn from the deck
-        this.setWheat(this.getWheat() + 1);
-        this.setOre(this.getOre() + 1);
-        this.setSheep(this.getSheep() + 1);
-        return;
+    public void payCard() {
+        //This function is called when card draw is valid
+        this.setWheat(this.getWheat() - 1);
+        this.setOre(this.getOre() - 1);
+        this.setSheep(this.getSheep() - 1);
     }
 
     public int useCard() {

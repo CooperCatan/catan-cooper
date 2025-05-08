@@ -45,8 +45,8 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
                 state.setNumRoads(rs.getLong("num_roads"));
                 state.setNumCities(rs.getLong("num_cities"));
                 state.setNumLongestContinuousRoad(rs.getLong("num_longest_continuous_road"));
-                state.setLargestArmy(rs.getBoolean("largest_army"));
-                state.setLongestRoad(rs.getBoolean("longest_road"));
+                state.setLargestArmy(rs.getLong("largest_army"));
+                state.setLongestRoad(rs.getLong("longest_road"));
                 return state;
             }
             return null;
@@ -128,8 +128,8 @@ public class PlayerStateDAO extends DataAccessObject<PlayerState> {
             statement.setLong(12, playerState.getNumRoads());
             statement.setLong(13, playerState.getNumCities());
             statement.setLong(14, playerState.getNumLongestContinuousRoad());
-            statement.setBoolean(15, playerState.isLargestArmy());
-            statement.setBoolean(16, playerState.isLongestRoad());
+            statement.setLong(15, playerState.isLargestArmy());
+            statement.setLong(16, playerState.isLongestRoad());
             statement.setLong(17, playerState.getAccountId());
             statement.setLong(18, playerState.getGameId());
             statement.setLong(19, playerState.getTurnNumber());
