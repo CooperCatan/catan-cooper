@@ -21,8 +21,6 @@ services:
   app:
     build: ./db-backend
     container_name: app
-    volumes:
-      - ./db-backend/firebase-service-account.json:/app/firebase-service-account.json
     environment:
       - SPRING_DATASOURCE_HOST=db
       - SPRING_DATASOURCE_NAME=catan
