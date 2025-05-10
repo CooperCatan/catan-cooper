@@ -5,5 +5,5 @@ RUN mvn -e package -DskipTests # skipping tests so i can run docker build, come 
 
 FROM eclipse-temurin:latest
 COPY --from=build /project/target/catan-1.0-SNAPSHOT.jar /app/catan.jar
-COPY --from=build /project/firebase-service-account.json /app/firebase-service-account.json
+COPY --from=build /project/src/main/resources/firebase-service-account.json /app/firebase-service-account.json
 ENTRYPOINT java -jar /app/catan.jar
