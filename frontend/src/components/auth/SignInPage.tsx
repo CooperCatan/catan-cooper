@@ -3,12 +3,28 @@ import { useNavigate } from 'react-router-dom';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { Home, ArrowRight } from 'lucide-react';
 
+const cn = (...classes: (string | { [key: string]: boolean })[]) => {
+  return classes
+    .map(cls => 
+      typeof cls === 'string' 
+        ? cls 
+        : Object.entries(cls)
+            .filter(([_, value]) => value)
+            .map(([key]) => key)
+            .join(' ')
+    )
+    .filter(Boolean)
+    .join(' ');
+};
+
 const SignInPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const auth = getAuth();
+
+  const isValidForm = email.length > 0 && password.length >= 3;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,7 +154,13 @@ const SignInPage = () => {
                 </div>
                 <button
                   type="submit"
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-gray-800/90 font-medium rounded-xl hover:bg-white/30 transition-all shadow-lg hover:shadow-xl border border-white/20"
+                  disabled={!isValidForm}
+                  className={cn(
+                    "w-full flex items-center justify-center gap-2 px-4 py-2 backdrop-blur-sm font-medium rounded-xl transition-all shadow-lg border",
+                    isValidForm
+                      ? "bg-white/20 text-gray-800/90 hover:bg-white/30 hover:shadow-xl border-white/20"
+                      : "bg-gray-100/50 text-gray-400 cursor-not-allowed border-gray-200/50"
+                  )}
                 >
                   <span>Sign In</span>
                   <ArrowRight size={16} />

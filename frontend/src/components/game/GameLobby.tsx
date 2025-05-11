@@ -6,7 +6,7 @@ import { XCircle, Home, Settings, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
 
 interface Game {
-  gameId: number;
+  id: number;
   playerList: number[];
   winnerId: number | null;
   isGameOver: boolean;
@@ -67,7 +67,7 @@ const GameCard: React.FC<{
 
   const handleLeaveGame = async () => {
     if (!account) return;
-    onLeave(game.gameId);
+    onLeave(game.id);
   };
 
   const getButtonText = () => {
@@ -78,12 +78,12 @@ const GameCard: React.FC<{
 
   const handleButtonClick = () => {
     if (canJoin || isUserInGame) {
-      onJoin(game.gameId);
+      onJoin(game.id);
     }
   };
 
   const handleGoToBoard = () => {
-    navigate(`/game/${game.gameId}`);
+    navigate(`/game/${game.id}`);
   };
 
   return (
@@ -97,7 +97,7 @@ const GameCard: React.FC<{
           <h3 className={cn(
             "text-xl font-bold",
             isCompleted ? "text-gray-600/90" : "text-gray-800/90"
-          )}>Game #{game.gameId}</h3>
+          )}>Game#{game.id}</h3>
           <p className={cn(
             "text-sm",
             isCompleted ? "text-gray-400/90" : "text-gray-600/90"
@@ -371,7 +371,7 @@ const GameLobby = () => {
     
     if (aIsWaiting && !bIsWaiting) return -1;
     if (!aIsWaiting && bIsWaiting) return 1;
-    return b.gameId - a.gameId;
+    return b.id - a.id;
   });
 
   if (loading) {
@@ -436,7 +436,7 @@ const GameLobby = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {sortedGames.map((game) => (
               <GameCard
-                key={`game-${game.gameId}`}
+                key={`game-${game.id}`}
                 game={game}
                 account={currentUser ? { id: parseInt(currentUser.uid), username, email: currentUser.email!, totalGames: 0, totalWins: 0, totalLosses: 0, elo: 1000 } : null}
                 onJoin={handleJoinGame}
