@@ -4,7 +4,12 @@ DROP TABLE IF EXISTS account;
 DROP SEQUENCE IF EXISTS account_id_seq;
 DROP SEQUENCE IF EXISTS game_id_seq;
 CREATE SEQUENCE account_id_seq START WITH 1 INCREMENT BY 1;
-CREATE SEQUENCE game_id_seq START WITH 1 INCREMENT BY 1;
+
+-- patch fix to fix game creation API breaking postgres unique constraint on
+-- game_id, will come back and fix this later if i have time instead of hardcoding 3
+-- here, this fix took me HOURS. next time check docker container logs
+
+CREATE SEQUENCE game_id_seq START WITH 3 INCREMENT BY 1;
 
 CREATE TABLE account (
     account_id bigint DEFAULT nextval('account_id_seq'),
