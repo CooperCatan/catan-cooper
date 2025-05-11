@@ -328,12 +328,16 @@ const GameLobby = () => {
       }
 
       const newGame = await response.json();
-      
+      console.log('Created new game:', newGame);
+
       // Close modal and clear input
       setIsCreateModalOpen(false);
       setNewGameName('');
 
-      // Refresh games list instead of full page reload
+      // Wait a short moment to ensure the game is fully created
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Refresh games list
       const gamesResponse = await fetch('http://localhost:8080/api/games', {
         headers: {
           'Authorization': `Bearer ${idToken}`
@@ -342,6 +346,7 @@ const GameLobby = () => {
 
       if (gamesResponse.ok) {
         const updatedGames = await gamesResponse.json();
+        console.log('Updated games list:', updatedGames);
         setGames(updatedGames);
       }
     } catch (error) {

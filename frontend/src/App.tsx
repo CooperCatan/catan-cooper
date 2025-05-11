@@ -16,38 +16,75 @@ interface Account {
 
 const App = () => {
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { currentUser, loading: authLoading } = useAuth();
   const auth = getAuth();
   const [account, setAccount] = useState<Account | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const loadUserData = async () => {
-      if (!currentUser) return;
+      // Don't do anything while auth is still initializing
+      if (authLoading) return;
+      
+      // Clear account if no user
+      if (!currentUser?.email) {
+        setAccount(null);
+        return;
+      }
 
+      setIsLoading(true);
+      
       try {
-        const response = await fetch('http://localhost:8080/api/account', {
-          method: 'GET',
+        const response = await fetch('http://localhost:8080/api/account/by-email', {
+          method: 'POST',
           headers: {
-            'Accept': 'application/json',
+            'Content-Type': 'application/json',
             'Authorization': `Bearer ${await currentUser.getIdToken()}`
-          }
+          },
+          body: JSON.stringify({ email: currentUser.email }),
+          credentials: 'include'
         });
 
-        if (!response.ok) throw new Error('Failed to fetch account');
-
-        const accounts: Account[] = await response.json();
-        const userAccount = accounts.find(acc => acc.email === currentUser.email);
-        
-        if (userAccount) {
-          setAccount(userAccount);
+        if (!response.ok) {
+          if (response.status === 404) {
+            setAccount(null);
+            return;
+          }
+          throw new Error('Failed to fetch account');
         }
+
+        const userAccount: Account = await response.json();
+        setAccount(userAccount);
       } catch (error) {
         console.error('Error fetching user account:', error);
+        if (error instanceof Error && error.message !== 'Failed to fetch account') {
+          console.error('Unexpected error:', error);
+        }
+      } finally {
+        setIsLoading(false);
       }
     };
 
     loadUserData();
-  }, [currentUser]);
+  }, [currentUser?.email, authLoading]); // Include authLoading in dependencies
+
+  // Show loading state for initial auth check
+  if (authLoading) {
+    return (
+      <div className="h-screen w-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
+        <div className="animate-pulse text-gray-600">Initializing...</div>
+      </div>
+    );
+  }
+
+  // Show loading state for account fetch
+  if (isLoading) {
+    return (
+      <div className="h-screen w-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
+        <div className="animate-pulse text-gray-600">Loading...</div>
+      </div>
+    );
+  }
 
   const handleSignOut = async () => {
     try {

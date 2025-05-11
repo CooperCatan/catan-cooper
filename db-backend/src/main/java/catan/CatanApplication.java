@@ -20,7 +20,6 @@ import java.util.ArrayList;
 
 @SpringBootApplication
 @RestController
-@CrossOrigin(origins = "*")
 public class CatanApplication {
     private final DatabaseConnectionManager dcm;
     private final FirebaseAuthService firebaseAuthService;
@@ -313,45 +312,103 @@ public class CatanApplication {
             @RequestBody CreateGameRequest request,
             @RequestHeader("Authorization") String idToken) {
         try {
+            System.out.println("[DEBUG] Starting game creation process");
             // Verify Firebase token
             String email = firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
+            System.out.println("[DEBUG] Firebase token verified for email: " + email);
             
             // Rate limiting
             Bucket bucket = createGameLimiter.computeIfAbsent(email, k -> createBucket());
             if (!bucket.tryConsume(1)) {
+                System.out.println("[DEBUG] Rate limit exceeded for email: " + email);
                 return ResponseEntity.status(429).body("Please wait before creating another game");
             }
+            System.out.println("[DEBUG] Rate limit check passed");
 
             try (Connection conn = dcm.getConnection()) {
+                System.out.println("[DEBUG] Database connection established");
+                
                 // Get user's account ID
                 AccountDAO accountDAO = new AccountDAO(conn);
                 Account account = accountDAO.findByEmail(email);
                 if (account == null) {
+                    System.out.println("[ERROR] Account not found for email: " + email);
                     return ResponseEntity.badRequest().body("Account not found");
                 }
+                System.out.println("[DEBUG] Found account with ID: " + account.getId());
 
-                // Create new game
+                // Create new game with proper initialization
                 GameDAO gameDAO = new GameDAO(conn);
                 Game newGame = new Game();
                 newGame.setGameName(request.getGameName());
                 newGame.setInProgress(false);
                 newGame.setIsGameOver(false);
                 
+                System.out.println("[DEBUG] Initializing game with name: " + request.getGameName());
+                
+                // Initialize all the required fields
+                newGame.setJsonHexes("[]");
+                newGame.setJsonVertices("[]");
+                newGame.setJsonEdges("[]");
+                newGame.setJsonPlayers("[]");
+                newGame.setBankBrick(19);
+                newGame.setBankOre(19);
+                newGame.setBankSheep(19);
+                newGame.setBankWheat(19);
+                newGame.setBankWood(19);
+                newGame.setBankYearOfPlenty(2);
+                newGame.setBankMonopoly(2);
+                newGame.setBankRoadBuilding(2);
+                newGame.setBankVictoryPoint(5);
+                newGame.setBankKnight(14);
+                
+                System.out.println("[DEBUG] Game object initialized with default values");
+                
+                // Create the game first
+                System.out.println("[DEBUG] Attempting to create game in database");
                 Game created = gameDAO.create(newGame);
-                if (created != null) {
-                    // Add the creator to the player list
-                    created = gameDAO.addPlayer(created.getId(), account.getId());
-                    return ResponseEntity.ok().body(created);
-                } else {
+                if (created == null) {
+                    System.out.println("[ERROR] Failed to create game in database");
                     return ResponseEntity.internalServerError().body("Failed to create game");
                 }
+                System.out.println("[DEBUG] Game created with ID: " + created.getId());
+                
+                // Then add the creator to the player list
+                System.out.println("[DEBUG] Attempting to add player " + account.getId() + " to game " + created.getId());
+                created = gameDAO.addPlayer(created.getId(), account.getId());
+                if (created == null) {
+                    System.out.println("[ERROR] Failed to add player to game");
+                    return ResponseEntity.internalServerError().body("Failed to add player to game");
+                }
+                System.out.println("[DEBUG] Player added to game successfully");
+                
+                // Get the full game data with player information
+                List<Account> players = new ArrayList<>();
+                for (Long playerId : created.getPlayerList()) {
+                    System.out.println("[DEBUG] Fetching player info for ID: " + playerId);
+                    Account player = accountDAO.findById(playerId);
+                    if (player != null) {
+                        players.add(player);
+                        System.out.println("[DEBUG] Added player: " + player.getUsername());
+                    }
+                }
+                created.setPlayers(players);
+                System.out.println("[DEBUG] Game creation process completed successfully");
+                
+                return ResponseEntity.ok().body(created);
             }
         } catch (FirebaseAuthException e) {
+            System.out.println("[ERROR] Firebase authentication error: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid token");
         } catch (SQLException e) {
+            System.out.println("[ERROR] Database error: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.internalServerError().body("Database error");
+        } catch (Exception e) {
+            System.out.println("[ERROR] Unexpected error: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("Unexpected error occurred");
         }
     }
 

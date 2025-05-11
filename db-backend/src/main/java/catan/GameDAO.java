@@ -98,14 +98,18 @@ public class GameDAO extends DataAccessObject<Game> {
     @Override
     public Game create(Game game) {
         try (PreparedStatement statement = this.connection.prepareStatement(INSERT)) {
+            System.out.println("[DEBUG] Starting game creation in GameDAO");
+            
             // Initialize an empty array for player_list
-            Array playerArray = connection.createArrayOf("bigint", new Long[0]);
+            System.out.println("[DEBUG] Creating player array with list: " + game.getPlayerList());
+            Array playerArray = connection.createArrayOf("bigint", game.getPlayerList().toArray());
             statement.setArray(1, playerArray);
             statement.setNull(2, java.sql.Types.BIGINT); // winner_id
             statement.setBoolean(3, game.isGameOver());
             statement.setBoolean(4, game.isInProgress());
             statement.setString(5, game.getGameName());
             
+            System.out.println("[DEBUG] Setting game state fields");
             // Set game state with null checks
             statement.setString(6, game.getJsonHexes() != null ? game.getJsonHexes() : "[]");
             statement.setString(7, game.getJsonVertices() != null ? game.getJsonVertices() : "[]");
@@ -124,17 +128,28 @@ public class GameDAO extends DataAccessObject<Game> {
             setNullableInt(statement, 20, game.getBankVictoryPoint());
             setNullableInt(statement, 21, game.getBankKnight());
             
+            System.out.println("[DEBUG] Executing INSERT query");
             ResultSet rs = statement.executeQuery();
             if (rs.next()) {
                 long gameId = rs.getLong("game_id");
+                System.out.println("[DEBUG] Game created with ID: " + gameId);
                 game.setGameId(gameId); // Set the ID on the game object
-                return findById(gameId);
+                Game found = findById(gameId);
+                System.out.println("[DEBUG] Retrieved created game: " + found);
+                return found;
+            } else {
+                System.out.println("[ERROR] No game ID returned from INSERT");
+                return null;
             }
         } catch (SQLException e) {
+            System.out.println("[ERROR] SQL error in create: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        } catch (Exception e) {
+            System.out.println("[ERROR] Unexpected error in create: " + e.getMessage());
             e.printStackTrace();
             throw new RuntimeException(e);
         }
-        return null;
     }
 
     @Override

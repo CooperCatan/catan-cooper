@@ -45,7 +45,10 @@ const SignUpPage = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
         },
+        credentials: 'include',
         body: JSON.stringify({ username }),
       });
 
@@ -53,10 +56,16 @@ const SignUpPage = () => {
         setUsernameError(null);
         setIsUsernameAvailable(true);
       } else {
-        setUsernameError('Username is already taken');
-        setIsUsernameAvailable(false);
+        const errorText = await response.text();
+        if (response.status === 400) {
+          setUsernameError('Username is already taken');
+          setIsUsernameAvailable(false);
+        } else {
+          throw new Error(`Server error: ${errorText}`);
+        }
       }
     } catch (error) {
+      console.error('Username check error:', error);
       setUsernameError('Error checking username availability');
       setIsUsernameAvailable(false);
     } finally {
@@ -80,26 +89,29 @@ const SignUpPage = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
+        credentials: 'include',
+        mode: 'cors',
         body: JSON.stringify({ email }),
       });
 
-      
+      console.log('Email check response:', response);
+
       if (response.ok) {
-        // email is available (not taken)
         setEmailError(null);
         setIsEmailAvailable(true);
       } else {
         const errorText = await response.text();
+        console.log('Email check error text:', errorText);
+        
         if (response.status === 400) {
-          // email is not available (taken)
           setEmailError('Email is already registered');
           setIsEmailAvailable(false);
         } else {
           throw new Error(`Server error: ${errorText}`);
         }
       }
-      // generic error w db
     } catch (error) {
       console.error('Email check error:', error);
       setEmailError('Error checking email availability');
