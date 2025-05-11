@@ -70,16 +70,9 @@ const GameCard: React.FC<{
     onLeave(game.id);
   };
 
-  const getButtonText = () => {
-    if (isCompleted) return 'Game Over';
-    if (isUserInGame) return 'Go to Board';
-    return 'Join Game';
-  };
-
-  const handleButtonClick = () => {
-    if (canJoin || isUserInGame) {
-      onJoin(game.id);
-    }
+  const handleJoinGame = () => {
+    if (!canJoin) return;
+    onJoin(game.id);
   };
 
   const handleGoToBoard = () => {
@@ -159,8 +152,8 @@ const GameCard: React.FC<{
           </div>
         ) : (
           <button
-            onClick={handleButtonClick}
-            disabled={!canJoin && !isUserInGame}
+            onClick={handleJoinGame}
+            disabled={!canJoin}
             className={cn(
               "w-full px-4 py-2 backdrop-blur-sm font-medium rounded-xl transition-all shadow-lg border",
               isCompleted 
@@ -172,7 +165,7 @@ const GameCard: React.FC<{
                     : "bg-gray-100/50 text-gray-400 cursor-not-allowed border-gray-200/50"
             )}
           >
-            {getButtonText()}
+            {isCompleted ? 'Game Over' : canJoin ? 'Join Game' : 'Cannot Join'}
           </button>
         )}
       </div>
@@ -186,13 +179,14 @@ const GameLobby = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newGameName, setNewGameName] = useState('');
   const [username, setUsername] = useState<string>('');
+  const [account, setAccount] = useState<Account | null>(null);
   const navigate = useNavigate();
   const { currentUser } = useAuth() as AuthContextType;
   const auth = getAuth();
 
-  // Fetch username on component mount
+  // Fetch account data and username on component mount
   useEffect(() => {
-    const fetchUsername = async () => {
+    const fetchAccountData = async () => {
       if (!currentUser) {
         setLoading(false);
         return;
@@ -200,33 +194,33 @@ const GameLobby = () => {
       
       try {
         const idToken = await currentUser.getIdToken();
-        const response = await fetch('http://localhost:8080/api/account/username', {
-          method: 'GET',
+        
+        // Fetch account data
+        const accountResponse = await fetch('http://localhost:8080/api/account/by-email', {
+          method: 'POST',
           headers: {
             'Authorization': `Bearer ${idToken}`,
             'Content-Type': 'application/json'
-          }
+          },
+          body: JSON.stringify({ email: currentUser.email })
         });
 
-        if (!response.ok) {
-          if (response.status === 404) {
-            console.error('Username not found');
-            setLoading(false);
-            return;
-          }
-          throw new Error(`Failed to fetch username: ${response.status}`);
+        if (accountResponse.ok) {
+          const accountData = await accountResponse.json();
+          setAccount(accountData);
+          setUsername(accountData.username);
+        } else {
+          console.error('Failed to fetch account data');
         }
 
-        const data = await response.json();
-        setUsername(data.username);
         setLoading(false);
       } catch (error) {
-        console.error('Error fetching username:', error);
+        console.error('Error fetching account data:', error);
         setLoading(false);
       }
     };
 
-    fetchUsername();
+    fetchAccountData();
   }, [currentUser]);
 
   // Fetch games periodically
@@ -269,36 +263,78 @@ const GameLobby = () => {
       const response = await fetch(`http://localhost:8080/api/games/${gameId}/players`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${idToken}`
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
         }
       });
 
-      if (!response.ok) throw new Error('Failed to join game');
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`Failed to join game: ${errorData}`);
+      }
 
-      navigate(`/game/${gameId}`);
+      const updatedGame = await response.json();
+      
+      // Update the games list with the new game data
+      setGames(prevGames => 
+        prevGames.map(game => 
+          game.id === gameId ? updatedGame : game
+        )
+      );
+
+      // Remove the immediate navigation
+      // The user will now see the "Go to Board" and "Leave Game" buttons
+      // and can choose when to navigate to the board
     } catch (error) {
       console.error('Error joining game:', error);
+      alert('Failed to join game. Please try again.');
     }
   };
 
   const handleLeaveGame = async (gameId: number) => {
-    if (!currentUser) return;
+    if (!currentUser || !account) return;
 
     try {
       const idToken = await currentUser.getIdToken();
       const response = await fetch(`http://localhost:8080/api/games/${gameId}/players`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${idToken}`
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
         }
       });
 
-      if (!response.ok) throw new Error('Failed to leave game');
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`Failed to leave game: ${errorData}`);
+      }
 
-      // Refresh games list
-      window.location.reload();
+      // Immediately update the player list to remove the current player
+      setGames(prevGames => 
+        prevGames.map(game => {
+          if (game.id === gameId) {
+            return {
+              ...game,
+              players: game.players?.filter(p => p.id !== account.id) || []
+            };
+          }
+          return game;
+        })
+      );
+
+      // Check if the response is plain text
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('text/plain')) {
+        const text = await response.text();
+        if (text === "Game deleted") {
+          // If the game was deleted, remove it from the list
+          setGames(prevGames => prevGames.filter(game => game.id !== gameId));
+        }
+      }
+      // No else clause needed since we've already updated the player list
     } catch (error) {
       console.error('Error leaving game:', error);
+      alert('Failed to leave game. Please try again.');
     }
   };
 
@@ -433,12 +469,12 @@ const GameLobby = () => {
             Create New Game
           </button>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sortedGames.map((game) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {sortedGames.map(game => (
               <GameCard
-                key={`game-${game.id}`}
+                key={game.id}
                 game={game}
-                account={currentUser ? { id: parseInt(currentUser.uid), username, email: currentUser.email!, totalGames: 0, totalWins: 0, totalLosses: 0, elo: 1000 } : null}
+                account={account}
                 onJoin={handleJoinGame}
                 onLeave={handleLeaveGame}
               />

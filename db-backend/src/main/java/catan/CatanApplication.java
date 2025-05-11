@@ -412,6 +412,66 @@ public class CatanApplication {
         }
     }
 
+    // Join game endpoint
+    @PostMapping("/api/games/{gameId}/players")
+    public ResponseEntity<?> joinGame(
+            @PathVariable long gameId,
+            @RequestHeader("Authorization") String idToken) {
+        try {
+            // Verify Firebase token
+            String email = firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
+
+            try (Connection conn = dcm.getConnection()) {
+                // Get user's account ID
+                AccountDAO accountDAO = new AccountDAO(conn);
+                Account account = accountDAO.findByEmail(email);
+                if (account == null) {
+                    return ResponseEntity.badRequest().body("Account not found");
+                }
+
+                GameDAO gameDAO = new GameDAO(conn);
+                Game game = gameDAO.findById(gameId);
+                if (game == null) {
+                    return ResponseEntity.notFound().build();
+                }
+
+                // Check if game is joinable
+                if (game.isGameOver() || game.isInProgress() || game.getPlayerList().size() >= 4) {
+                    return ResponseEntity.badRequest().body("Game cannot be joined");
+                }
+
+                // Check if player is already in the game
+                if (game.getPlayerList().contains(account.getId())) {
+                    return ResponseEntity.badRequest().body("Already in game");
+                }
+
+                // Add player to game
+                game = gameDAO.addPlayer(gameId, account.getId());
+                if (game == null) {
+                    return ResponseEntity.internalServerError().body("Failed to join game");
+                }
+
+                // Get the full game data with player information
+                List<Account> players = new ArrayList<>();
+                for (Long playerId : game.getPlayerList()) {
+                    Account player = accountDAO.findById(playerId);
+                    if (player != null) {
+                        players.add(player);
+                    }
+                }
+                game.setPlayers(players);
+
+                return ResponseEntity.ok().body(game);
+            }
+        } catch (FirebaseAuthException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid token");
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("Database error");
+        }
+    }
+
     // Leave game endpoint
     @DeleteMapping("/api/games/{gameId}/players")
     public ResponseEntity<?> leaveGame(
