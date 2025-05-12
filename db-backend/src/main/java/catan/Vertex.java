@@ -8,6 +8,12 @@ public class Vertex {
     private boolean isOccupied;
     private Long ownerId;
     private String buildingType;  // "settlement" or "city"
+    
+    // need coordinates for rendering
+    private double x;
+    private double y;
+    
+    // list of connected elements on board
     private List<Integer> adjacentVertices;
     private List<Integer> connectedEdges;
     private List<Integer> adjacentHexes;
@@ -17,6 +23,9 @@ public class Vertex {
         this.adjacentVertices = new ArrayList<>();
         this.connectedEdges = new ArrayList<>();
         this.adjacentHexes = new ArrayList<>();
+        // default coords, should be overwritten
+        this.x = 0.0;
+        this.y = 0.0;
     }
 
     public int getId() { return id; }
@@ -30,6 +39,12 @@ public class Vertex {
 
     public String getBuildingType() { return buildingType; }
     public void setBuildingType(String buildingType) { this.buildingType = buildingType; }
+
+    public double getX() { return x; }
+    public void setX(double x) { this.x = x; }
+
+    public double getY() { return y; }
+    public void setY(double y) { this.y = y; }
 
     public List<Integer> getAdjacentVertices() { return adjacentVertices; }
     public void setAdjacentVertices(List<Integer> adjacentVertices) { this.adjacentVertices = adjacentVertices; }

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth, signOut, User } from 'firebase/auth';
-import { PLAYER_COLORS } from './GameBoard';
 import { XCircle, Home, Settings, X, Trophy } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
 
@@ -24,6 +23,7 @@ interface Account {
   totalWins: number;
   totalLosses: number;
   elo: number;
+  color?: string;
 }
 
 interface AuthContextType {
@@ -114,12 +114,12 @@ const GameCard: React.FC<{
         <div className="space-y-2 h-[160px]">
           {game.players?.map((player, index) => (
             <div 
-              key={index}
+              key={player.id}
               className="flex items-center gap-2 px-3 py-2 bg-white/10 rounded-lg border border-white/10"
             >
               <div 
                 className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: PLAYER_COLORS[index + 1] }}
+                style={{ backgroundColor: player.color || '#808080' }}
               />
               <div className="flex items-center gap-1">
                 <span className="text-sm text-gray-700/90">{player.username}</span>
@@ -195,7 +195,7 @@ const GameLobby = () => {
       try {
         const idToken = await currentUser.getIdToken();
         
-        // Fetch account data
+        // fetch acct 
         const accountResponse = await fetch('http://localhost:8080/api/account/by-email', {
           method: 'POST',
           headers: {
@@ -223,7 +223,7 @@ const GameLobby = () => {
     fetchAccountData();
   }, [currentUser]);
 
-  // Fetch games periodically
+  // fetch games on Game Lobby
   useEffect(() => {
     const fetchGames = async () => {
       if (!currentUser) return;
@@ -238,7 +238,12 @@ const GameLobby = () => {
 
         if (!response.ok) throw new Error('Failed to fetch games');
 
-        const gamesData = await response.json();
+        let gamesData = await response.json();
+        // ensure players array has the color field (even if null initially)
+        gamesData = gamesData.map((game: Game) => ({
+            ...game,
+            players: game.players?.map(p => ({ ...p, color: p.color || null })) || []
+        }));
         setGames(gamesData);
         setLoading(false);
       } catch (error) {
@@ -246,10 +251,10 @@ const GameLobby = () => {
       }
     };
 
-    // Initial fetch
+    // init fetch
     fetchGames();
 
-    // Set up polling every 5 seconds
+    // poll every 5 secs
     const interval = setInterval(fetchGames, 5000);
 
     return () => clearInterval(interval);
@@ -275,16 +280,13 @@ const GameLobby = () => {
 
       const updatedGame = await response.json();
       
-      // Update the games list with the new game data
+      // update the games list with the new game data
       setGames(prevGames => 
         prevGames.map(game => 
           game.id === gameId ? updatedGame : game
         )
       );
 
-      // Remove the immediate navigation
-      // The user will now see the "Go to Board" and "Leave Game" buttons
-      // and can choose when to navigate to the board
     } catch (error) {
       console.error('Error joining game:', error);
       alert('Failed to join game. Please try again.');
@@ -309,7 +311,8 @@ const GameLobby = () => {
         throw new Error(`Failed to leave game: ${errorData}`);
       }
 
-      // Immediately update the player list to remove the current player
+      // immediately update the player list to remove the current player on 
+      // the games' player list
       setGames(prevGames => 
         prevGames.map(game => {
           if (game.id === gameId) {

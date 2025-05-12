@@ -32,7 +32,7 @@ type ActionType = 'SETTLEMENT' | 'CITY' | 'ROAD' | 'TRADE' | 'DEV_CARD' | null;
 interface BoardState {
   hexes: {
     id: number;
-    type: 'desert' | 'wood' | 'brick' | 'ore' | 'wheat' | 'wool';
+    type: 'desert' | 'wood' | 'brick' | 'ore' | 'wheat' | 'sheep';
     number?: number;
     hasRobber: boolean;
     x: number;
@@ -66,14 +66,7 @@ const GameRoom = () => {
   const [isSetupPhase, setIsSetupPhase] = useState(true);
   const [currentTurn, setCurrentTurn] = useState<number | null>(null);
   const [isCurrentTurn, setIsCurrentTurn] = useState(false);
-  const [game, setGame] = useState<{
-    id: number;
-    playerList: number[];
-    winnerId: number | null;
-    isGameOver: boolean;
-    inProgress: boolean;
-    gameName: string;
-  } | null>(null);
+  const [game, setGame] = useState<any | null>(null);
   const [selectedAction, setSelectedAction] = useState<ActionType>(null);
   const [showTradeModal, setShowTradeModal] = useState(false);
   const [devCards, setDevCards] = useState<{
@@ -89,11 +82,29 @@ const GameRoom = () => {
     roadBuilding: 0,
     victoryPoint: 0
   });
-  const [boardState, setBoardState] = useState<BoardState>({
-    hexes: [],
-    vertices: [],
-    edges: []
-  });
+  const [gameData, setGameData] = useState<any | null>(null);
+  const [boardState, setBoardState] = useState<any | null>(null);
+  const [currentAccountId, setCurrentAccountId] = useState<number | null>(null);
+
+  const processPlayersData = (playersArray: any[], currentUserEmail: string | null | undefined) => {
+    return playersArray.map((p: any) => ({
+      ...p,
+      isCurrentUser: p.email === currentUserEmail,
+      devCards: p.devCards ? {
+        knight: p.devCards.knight || 0,
+        yearOfPlenty: p.devCards.yearOfPlenty || 0,
+        monopoly: p.devCards.monopoly || 0,
+        roadBuilding: p.devCards.roadBuilding || 0,
+        victoryPoint: p.devCards.victoryPoint || 0,
+      } : {
+        knight: 0,
+        yearOfPlenty: 0,
+        monopoly: 0,
+        roadBuilding: 0,
+        victoryPoint: 0,
+      }
+    }));
+  };
 
   useEffect(() => {
     console.log('[DEBUG] GameRoom mounted with gameId:', gameId);
@@ -103,39 +114,56 @@ const GameRoom = () => {
       return;
     }
 
-    // Fetch game data and players
-    const fetchGameAndPlayers = async () => {
-      console.log('[DEBUG] Fetching game data for gameId:', gameId);
+    const fetchInitialData = async () => {
+      console.log('[DEBUG] Fetching initial game data and user account for gameId:', gameId);
       try {
-        const response = await fetch(`http://localhost:8080/api/games/${gameId}`);
-        console.log('[DEBUG] Game fetch response status:', response.status);
+        const token = await currentUser.getIdToken();
+        const headers = { 'Authorization': `Bearer ${token}` };
         
-        if (!response.ok) {
-          console.error('[ERROR] Failed to fetch game:', {
-            status: response.status,
-            statusText: response.statusText,
-            url: response.url
-          });
-          throw new Error('Failed to fetch game');
+        // Fetch game details
+        const gameResponse = await fetch(`http://localhost:8080/api/games/${gameId}`, { headers });
+        console.log('[DEBUG] Game fetch response status:', gameResponse.status);
+        if (!gameResponse.ok) {
+          console.error('[ERROR] Failed to fetch game:', gameResponse);
+          throw new Error('Failed to fetch game data');
+        }
+        const gameDetails = await gameResponse.json();
+        console.log('[DEBUG] Fetched game data (initial):', gameDetails);
+        setGameData(gameDetails.game);
+        if (gameDetails.boardState) {
+          setBoardState(gameDetails.boardState);
+        } else {
+          setBoardState(null);
+        }
+        // setGame(gameDetails.game); // Keep if old 'game' state is used elsewhere, else remove
+
+        // fetch current user's account details to get numeric ID
+        const accountResponse = await fetch(`http://localhost:8080/api/account/by-email`, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: currentUser.email })
+        });
+        if (accountResponse.ok) {
+          const accountData = await accountResponse.json();
+          console.log('[DEBUG] Fetched current user account data:', accountData);
+          setCurrentAccountId(accountData.id); // store the numeric account ID
+          // process players after getting current user's account ID to correctly set isCurrentUser
+          const fetchedPlayers = gameDetails.game.players || [];
+          setPlayers(processPlayersData(fetchedPlayers, currentUser.email)); // email for isCurrentUser logic
+        } else {
+          console.error('[ERROR] Failed to fetch current user account data.');
+           // handle case where account might not exist in DB yet if it's a new user straight to game room
+           // should not hapen bc the gameLobby, gameRoom, etc is a protected path
         }
 
-        const data = await response.json();
-        console.log('[DEBUG] Received game data:', data);
-        
-        setGame(data);
-        if (data.players) {
-          console.log('[DEBUG] Setting players:', data.players);
-          setPlayers(data.players);
-        }
       } catch (error) {
-        console.error('[ERROR] Error fetching game data:', error);
-        throw error;
+        console.error('[ERROR] Error fetching initial data:', error);
       }
     };
 
-    fetchGameAndPlayers();
+    fetchInitialData();
 
-    // Set up countdown timer
+    // set up countdown timer -- unused
     const timer = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
@@ -152,100 +180,114 @@ const GameRoom = () => {
   }, [auth, navigate, gameId]);
 
   useEffect(() => {
-    console.log('[DEBUG] Setting up game state polling');
-    if (gameId && game?.inProgress) {
+    console.log('[DEBUG] Setting up game state polling, gameData:', gameData);
+    // poll if gameId exists and game is not over (or gameData is not yet loaded)
+    if (gameId && (!gameData || !gameData.isGameOver)) {
       const interval = setInterval(() => {
-        console.log('[DEBUG] Polling game state');
+        console.log('[DEBUG] Polling game state...');
         fetchGameState().catch(error => {
           console.error('[ERROR] Game state polling failed:', error);
         });
-      }, 5000);
+      }, 5000); // poll every 5 seconds
 
       return () => {
         console.log('[DEBUG] Cleaning up game state polling');
         clearInterval(interval);
       };
     }
-  }, [gameId, game?.inProgress]);
+  }, [gameId, gameData]); // depend on gameData to re-evaluate polling when game status changes
 
   const fetchGameState = async () => {
     console.log('[DEBUG] Fetching game state for gameId:', gameId);
+    if (!auth.currentUser) {
+      console.warn('[WARN] User not authenticated, skipping fetchGameState');
+      return; 
+    }
     try {
-      const response = await fetch(`http://localhost:8080/api/games/${gameId}`);
-      console.log('[DEBUG] Game state fetch response status:', response.status);
+      const token = await auth.currentUser.getIdToken();
+      const headers = { 'Authorization': `Bearer ${token}` }; // Add auth header for polling too
+      const response = await fetch(`http://localhost:8080/api/games/${gameId}`, { headers });
+      console.log('[DEBUG] Polled game state fetch response status:', response.status);
       
       if (!response.ok) {
-        console.error('[ERROR] Failed to fetch game state:', {
+        console.error('[ERROR] Failed to fetch polled game state:', {
           status: response.status,
           statusText: response.statusText,
           url: response.url
         });
-        throw new Error('Failed to fetch game state');
+        if (response.status === 404) {
+          console.warn('[WARN] Game not found during polling, navigating to lobby.');
+          navigate('/lobby');
+        }
+        return; 
       }
 
       const data = await response.json();
-      console.log('[DEBUG] Received game state:', data);
+      console.log('[DEBUG] Received polled game state:', data);
       
-      // Update game state
-      setGame(data);
-      
-      // Update board state if available
-      if (data.boardState) {
-        console.log('[DEBUG] Setting board state:', data.boardState);
-        setBoardState({
-          hexes: data.boardState.hexes || [],
-          vertices: data.boardState.vertices || [],
-          edges: data.boardState.edges || []
-        });
+      if (data.game) {
+        console.log(`[DEBUG] Polled game data - gameId: ${data.game.id}, inProgress: ${data.game.inProgress}`);
+        setGameData(data.game);
+        const fetchedPlayers = data.game.players || [];
+        const currentUserEmail = auth.currentUser?.email;
+        setPlayers(processPlayersData(fetchedPlayers, currentUserEmail));
       } else {
-        console.warn('[WARN] No board state in response:', data);
+        console.warn('[WARN] Polled data missing game object');
+      }
+      
+      if (data.boardState) {
+        console.log('[DEBUG] Received boardState in poll, updating local boardState.');
+        setBoardState(data.boardState);
+      } else if (data.game && !data.game.inProgress) {
+        console.log('[DEBUG] Game not in progress (from poll) and no boardState in poll, clearing local boardState.');
+        setBoardState(null);
       }
 
-      // Update current turn
-      if (data.currentTurn) {
-        console.log('[DEBUG] Setting current turn:', data.currentTurn);
-        setCurrentTurn(data.currentTurn);
+      // update whose the current turn
+      if (data.game && data.game.currentTurn) {
+        console.log('[DEBUG] Setting current turn from poll:', data.game.currentTurn);
+        setCurrentTurn(data.game.currentTurn);
       }
     } catch (error) {
-      console.error('[ERROR] Error fetching game state:', error);
-      throw error;
+      console.error('[ERROR] Error fetching polled game state:', error);
+  
     }
   };
 
   const handleTurnComplete = () => {
     if (!game || currentTurn === null) return;
 
-    // Get current player index
+    // get current player index
     const currentPlayerIndex = game.playerList.indexOf(currentTurn);
     let nextPlayerIndex;
 
     if (isSetupPhase) {
-      // During setup phase:
-      // First round: 0 -> 1 -> 2 -> 3
-      // Second round: 3 -> 2 -> 1 -> 0
-      const isFirstRound = game.playerList.every(playerId => {
+      // during setup phase:
+      // first round: 0 -> 1 -> 2 -> 3
+      // second round: 3 -> 2 -> 1 -> 0
+      const isFirstRound = game.playerList.every((playerId: number) => {
         const player = players.find(p => p.id === playerId);
         return player?.devCards.roadBuilding === 0;
       });
 
       if (isFirstRound) {
-        // Move forward
+        // move forward
         nextPlayerIndex = (currentPlayerIndex + 1) % game.playerList.length;
         if (nextPlayerIndex === 0) {
-          // Start second round
+          // start second round
           nextPlayerIndex = game.playerList.length - 1;
         }
       } else {
-        // Move backward
+        // move backward
         nextPlayerIndex = currentPlayerIndex - 1;
         if (nextPlayerIndex < 0) {
-          // Setup phase complete
+          // setup phase complete
           setIsSetupPhase(false);
-          nextPlayerIndex = 0; // Start with first player for regular game
+          nextPlayerIndex = 0; // start with first player for regular game
         }
       }
     } else {
-      // Regular game: clockwise rotation
+      // regular game: clockwise rotation
       nextPlayerIndex = (currentPlayerIndex + 1) % game.playerList.length;
     }
 
@@ -254,24 +296,27 @@ const GameRoom = () => {
 
   const handleStartGame = async () => {
     console.log('handleStartGame called, gameId:', gameId);
-    if (!gameId) {
-      console.log('No gameId found, returning');
+    if (!gameId || !auth.currentUser) {
+      console.log('No gameId or current user found, returning');
       return;
     }
 
     try {
+      const token = await auth.currentUser.getIdToken();
+      const headers = { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      };
+
       console.log('Making start game request to:', `http://localhost:8080/api/games/${gameId}/start`);
       const response = await fetch(`http://localhost:8080/api/games/${gameId}/start`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers: headers
       });
 
       console.log('Start game response status:', response.status);
       console.log('Start game response headers:', Object.fromEntries(response.headers.entries()));
       
-      // Always try to read the response body, regardless of status
       let responseBody;
       try {
         const textBody = await response.text();
@@ -299,21 +344,37 @@ const GameRoom = () => {
       }
 
       const data = responseBody;
-      console.log('Start game successful, processing response data:', data);
+      console.log('[DEBUG] Start game API call successful, raw response data:', data);
 
-      // Validate response data
-      if (!data.game) {
-        console.error('Invalid response data - missing game object:', data);
+      if (!data || !data.game) {
+        console.error('[ERROR] Invalid response data from start game API - missing game object:', data);
         throw new Error('Invalid server response: missing game data');
       }
 
-      // Update game state
-      console.log('Updating game state with:', data.game);
-      setGame(data.game);
+      // +++ DEBUG LOG: Check received vertices before setting state +++
+      if (data.boardState && data.boardState.vertices) {
+          const receivedVertices = data.boardState.vertices;
+          console.log(`[GameRoom DEBUG] Received ${receivedVertices.length} vertices from API.`);
+          if (receivedVertices.length > 0) {
+              console.log('[GameRoom DEBUG] First received vertex:', JSON.stringify(receivedVertices[0]));
+              console.log('[GameRoom DEBUG] Last received vertex:', JSON.stringify(receivedVertices[receivedVertices.length - 1]));
+              // Check specifically for vertex 55
+              const vertex55 = receivedVertices.find((v: any) => v.id === 55);
+              console.log('[GameRoom DEBUG] Found vertex with ID 55 in received data:', !!vertex55, vertex55 ? JSON.stringify(vertex55) : 'Not Found');
+          }
+      } else {
+          console.warn('[GameRoom DEBUG] No boardState.vertices received in API response.');
+      }
+      // +++ END DEBUG LOG +++
+
+      console.log(`[DEBUG] Game data from start response - gameId: ${data.game.id}, inProgress: ${data.game.inProgress}, name: ${data.game.gameName}`);
+
+      // update game state
+      setGameData(data.game);
       
-      // Update board state
+      // update board state
       if (data.boardState) {
-        console.log('Updating board state with:', data.boardState);
+        console.log('[DEBUG] Updating board state with data from start game response.');
         const { hexes, vertices, edges } = data.boardState;
         setBoardState({
           hexes: hexes || [],
@@ -324,12 +385,13 @@ const GameRoom = () => {
         console.warn('No board state received in response');
       }
 
-      // Set initial turn order - host (first player) goes first
+      // set init turn order - host (first player) goes first 
+      // can change later to allow shuffling of players
       if (data.game.playerList && data.game.playerList.length > 0) {
         console.log('Setting initial turn to:', data.game.playerList[0]);
         setCurrentTurn(data.game.playerList[0]);
         
-        // If current user is first player, enable their turn
+        // if current user is first player, enable their turn
         const currentPlayer = players.find(p => p.isCurrentUser);
         if (currentPlayer && currentPlayer.id === data.game.playerList[0]) {
           console.log('Enabling turn for current player:', currentPlayer.id);
@@ -339,7 +401,7 @@ const GameRoom = () => {
         console.warn('No player list in game data:', data.game);
       }
 
-      // Show a message to indicate game has started
+      // show a message to indicate game has started
       alert('Game has started! First player can now take their turn.');
     } catch (error: any) {
       console.error('Error in handleStartGame:', {
@@ -354,39 +416,6 @@ const GameRoom = () => {
     }
   };
 
-  const handleQuitGame = async () => {
-    if (!gameId || !auth.currentUser) return;
-
-    try {
-      // Find the current user's account ID from the players list
-      const currentPlayer = players.find(p => p.isCurrentUser);
-      if (!currentPlayer) {
-        console.error('Current player not found in game');
-        navigate('/lobby');
-        return;
-      }
-
-      // Call the leave game API
-      const response = await fetch(`http://localhost:8080/api/games/${gameId}/leave`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ accountId: currentPlayer.id })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to leave game');
-      }
-
-      // Navigate back to lobby
-      navigate('/lobby');
-    } catch (error) {
-      console.error('Error leaving game:', error);
-      // Still navigate to lobby even if there's an error
-      navigate('/lobby');
-    }
-  };
 
   const handleActionClick = (action: ActionType) => {
     if (selectedAction === action) {
@@ -457,10 +486,10 @@ const GameRoom = () => {
 
       const data = await response.json();
       
-      // Update game state
+      // update game state
       setGame(data.game);
       
-      // If game is over, show winner
+      // if game is over, show winner
       if (data.game.isGameOver) {
         const winner = players.find(p => p.id === data.game.winnerId);
         alert(`Game Over! ${winner?.username} has won the game!`);
@@ -468,7 +497,7 @@ const GameRoom = () => {
         return;
       }
 
-      // Move to next player's turn
+      // move to next player's turn
       handleTurnComplete();
     } catch (error) {
       console.error('Error ending turn:', error);
@@ -519,7 +548,7 @@ const GameRoom = () => {
 
       switch (cardType) {
         case 'knight':
-          // For Knight card, we need to select a hex and a player to steal from
+          // for Knight card, we need to select a hex and a player to steal from
           const targetHex = window.prompt('Enter the hex number to move the robber to:');
           const targetPlayer = window.prompt('Enter the player ID to steal from:');
           if (!targetHex || !targetPlayer) return;
@@ -530,22 +559,22 @@ const GameRoom = () => {
           break;
 
         case 'yearOfPlenty':
-          // For Year of Plenty, we need to select two resources
-          const resource1 = window.prompt('Select first resource (brick, wood, ore, wheat, wool):');
-          const resource2 = window.prompt('Select second resource (brick, wood, ore, wheat, wool):');
+          // for yop, select 2 resources
+          const resource1 = window.prompt('Select first resource (brick, wood, ore, wheat, sheep):');
+          const resource2 = window.prompt('Select second resource (brick, wood, ore, wheat, sheep):');
           if (!resource1 || !resource2) return;
           additionalParams = { resource1, resource2 };
           break;
 
         case 'monopoly':
-          // For Monopoly, we need to select one resource type
-          const resource = window.prompt('Select resource to monopolize (brick, wood, ore, wheat, wool):');
+          // for mono, select one resource type 
+          const resource = window.prompt('Select resource to monopolize (brick, wood, ore, wheat, sheep):');
           if (!resource) return;
           additionalParams = { resource };
           break;
 
         case 'roadBuilding':
-          // For Road Building, we need to select two edges
+          // for road building, we need to select two edges
           const edge1 = window.prompt('Enter the first edge ID:');
           const edge2 = window.prompt('Enter the second edge ID:');
           if (!edge1 || !edge2) return;
@@ -573,13 +602,13 @@ const GameRoom = () => {
       }
 
       const data = await response.json();
-      // Update dev cards count
+      // update dev cards count
       setDevCards(prev => ({
         ...prev,
         [cardType]: prev[cardType as keyof typeof prev] - 1
       }));
       
-      // Update game state if needed
+      // update game state if needed
       if (data.game) {
         setGame(data.game);
       }
@@ -588,9 +617,38 @@ const GameRoom = () => {
     }
   };
 
-  const PlayerCard = ({ player }: { player: Player }) => {
+  // what is going on here???
+  const handleSetupActionSuccess = (responseData: any) => {
+    console.log('[GameRoom] Setup action successful, updating state:', responseData);
+    if (responseData.game) {
+      setGameData(responseData.game);
+      // potentially update players list if responseData.game.players is more current
+      const fetchedPlayers = responseData.game.players || [];
+      const currentUserEmail = auth.currentUser?.email;
+      setPlayers(processPlayersData(fetchedPlayers, currentUserEmail));
+    }
+    if (responseData.boardState) {
+      setBoardState(responseData.boardState);
+    }
+    // potentially update currentTurn, isSetupPhase etc. based on new gameData
+    if (responseData.game && responseData.game.currentTurn) {
+        setCurrentTurn(responseData.game.currentTurn);
+    }
+    // If setup phase is completed based on game logic from backend, update isSetupPhase
+    // Example: if (responseData.game.setupPhaseCompleted) { setIsSetupPhase(false); }
+  };
+
+  const handleQuitGame = () => {
+    // potentially update game state to remove player from player list, for turn management
+    // check if the player is in player list, if not, skip their turn
+    // if only one player left, crown them the winner automatically. 
+    navigate('/lobby');
+  };
+
+  const PlayerCard = ({ player, isHost }: { player: Player; isHost: boolean }) => {
     // Host is the first player in the player list
-    const isHost = game?.playerList[0] === player.id;
+    // const isHost = game?.playerList[0] === player.id; // Old logic, gameData is better
+    // const isHost = gameData?.playerList[0] === player.id; // Removed: isHost is now a prop
 
     return (
     <div 
@@ -598,23 +656,25 @@ const GameRoom = () => {
         "relative rounded-xl p-4 transition-all duration-200",
         "bg-white/20 backdrop-blur-sm",
         "border-[1.5px] shadow-lg hover:shadow-xl",
-        currentTurn === player.id && "ring-2 ring-offset-2 ring-offset-blue-100/50"
+        gameData?.inProgress && currentTurn === player.id && "ring-2 ring-offset-2 ring-offset-blue-100/50" // Only ring if game in progress and current turn
       )}
       style={{
         borderColor: player.color
       }}
     >
-        {game?.inProgress ? (
-          currentTurn === player.id && (
+        {/* Badge Logic: Show 'Waiting' if game NOT in progress, Show 'Current Turn' if game IS in progress AND it's this player's turn */}
+        {!gameData?.inProgress && (
+          <div className="absolute -top-2 -right-2 px-2 py-0.5 bg-gray-400/90 backdrop-blur-sm text-white text-xs font-medium rounded-full shadow-sm">
+            Waiting to Start
+          </div>
+        )}
+        {gameData?.inProgress && currentTurn === player.id && (
         <div className="absolute -top-2 -right-2 px-2 py-0.5 bg-green-500/90 backdrop-blur-sm text-white text-xs font-medium rounded-full shadow-sm">
           Current Turn
             </div>
           )
-        ) : (
-          <div className="absolute -top-2 -right-2 px-2 py-0.5 bg-green-500/90 backdrop-blur-sm text-white text-xs font-medium rounded-full shadow-sm">
-            Waiting to Start
-          </div>
-        )}
+        }
+        {/* Host Badge (independent of game progress) */}
         {isHost && (
           <div className="absolute -top-2 -left-2 px-2 py-0.5 bg-purple-500/90 backdrop-blur-sm text-white text-xs font-medium rounded-full shadow-sm">
             Host
@@ -627,7 +687,7 @@ const GameRoom = () => {
               "w-4 h-4 rounded-full border-2",
               "transition-all duration-200"
             )}
-            style={{ 
+            style={{
               backgroundColor: player.isCurrentUser ? 'white' : player.color,
               borderColor: player.color
             }}
@@ -696,7 +756,7 @@ const GameRoom = () => {
               </div>
               <div className="flex items-center gap-1 text-gray-700">
                 <span>🐑</span>
-                <span>{player.resources.wool}</span>
+                <span>{player.resources.sheep}</span>
               </div>
             </div>
           </div>
@@ -825,6 +885,9 @@ const GameRoom = () => {
     );
   };
 
+  const isCurrentUserHost = gameData && gameData.playerList && gameData.playerList.length > 0 && players.find(p => p.isCurrentUser)?.id === gameData.playerList[0];
+  const showStartGameButton = gameData && !gameData.inProgress && !gameData.isGameOver && isCurrentUserHost;
+
   return (
     <div className="h-screen w-screen bg-gradient-to-br from-blue-50 to-blue-100 flex overflow-hidden">
       <button
@@ -841,16 +904,24 @@ const GameRoom = () => {
             <h2 className="text-2xl font-bold text-gray-800/90">Game #{gameId}</h2>
           </div>
           <div className="w-full h-[calc(100%-80px)]">
-            <GameBoard 
-              gameId={Number(gameId)}
-              accountId={Number(auth.currentUser?.uid)}
-              isSetupPhase={isSetupPhase}
-              isCurrentTurn={currentTurn === players.find(p => p.isCurrentUser)?.id}
-              onPlacementComplete={handleTurnComplete}
-              selectedAction={selectedAction}
-              onActionSelect={handleGameAction}
-              boardState={boardState}
-            />
+            {gameData && (
+              <h2 className="text-2xl font-bold mb-4 text-center">{gameData.gameName}</h2>
+            )}
+            {boardState && currentAccountId !== null && (
+              <GameBoard 
+                gameId={Number(gameId)}
+                accountId={currentAccountId}
+                auth={auth}
+                isSetupPhase={isSetupPhase}
+                isCurrentTurn={currentTurn === players.find(p => p.isCurrentUser)?.id}
+                onPlacementComplete={handleTurnComplete}
+                selectedAction={selectedAction}
+                onActionSelect={handleGameAction}
+                boardState={boardState}
+                gameConfig={gameData}
+                onSetupActionSuccess={handleSetupActionSuccess}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -859,7 +930,7 @@ const GameRoom = () => {
       <div className="w-96 bg-white/10 backdrop-blur-sm border-l border-white/20 p-6 overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-800/90">Players</h2>
-          {game && !game.inProgress && !game.isGameOver && game.playerList[0] === players.find(p => p.isCurrentUser)?.id && (
+          {showStartGameButton && (
             <button
               onClick={handleStartGame}
               className="px-4 py-2 bg-green-100/50 text-green-700/90 hover:bg-green-100/60 font-medium rounded-xl transition-all shadow-lg hover:shadow-xl border border-green-200/50 backdrop-blur-sm"
@@ -869,9 +940,10 @@ const GameRoom = () => {
           )}
         </div>
         <div className="space-y-4">
-          {players.map(player => (
-            <PlayerCard key={player.id} player={player} />
-          ))}
+          {players.map(p => {
+            const isHostForThisCard = gameData && gameData.playerList && gameData.playerList.length > 0 && gameData.playerList[0] === p.id;
+            return <PlayerCard key={p.id} player={p} isHost={isHostForThisCard} />;
+          })}
         </div>
       </div>
     </div>

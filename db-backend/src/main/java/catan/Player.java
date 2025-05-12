@@ -4,6 +4,7 @@ import java.util.*;
 
 public class Player {
     private long accountId;
+    private String color;
     private int ore;
     private int sheep;
     private int wheat;
@@ -22,8 +23,13 @@ public class Player {
     private boolean hasLargestArmy;
     private boolean hasLongestRoad;
 
+    public Player() {
+        // default constructor for json deserialization
+    }
+
     public Player(long accountId) {
         this.accountId = accountId;
+        this.color = null;
         this.victoryPoints = 0;
         this.numSettlements = 0;
         this.numCities = 0;
@@ -32,7 +38,7 @@ public class Player {
         this.hasLongestRoad = false;
     }
 
-    // Resource Management
+    // resource management
     public boolean hasResources(int brick, int ore, int sheep, int wheat, int wood) {
         return this.brick >= brick &&
                this.ore >= ore &&
@@ -99,7 +105,7 @@ public class Player {
         return brick + ore + sheep + wheat + wood;
     }
 
-    // Development Card Management
+    // dev card management
     public void addDevelopmentCard(String cardType) {
         switch (cardType) {
             case "knight": knightCards++; break;
@@ -142,7 +148,7 @@ public class Player {
         }
     }
 
-    // Building Management
+    // building management
     public void incrementSettlements() {
         numSettlements++;
     }
@@ -232,4 +238,16 @@ public class Player {
 
     public boolean hasLongestRoad() { return hasLongestRoad; }
     public void setLongestRoad(boolean hasLongestRoad) { this.hasLongestRoad = hasLongestRoad; }
+
+    public void addInitialResourcesFromSettlement(List<Hex> adjacentHexes) {
+        if (adjacentHexes == null) return;
+        for (Hex hex : adjacentHexes) {
+            if (hex != null && !"desert".equalsIgnoreCase(hex.getType())) {
+                addResource(hex.getType(), 1);
+            }
+        }
+    }
+
+    public String getColor() { return color; }
+    public void setColor(String color) { this.color = color; }
 } 

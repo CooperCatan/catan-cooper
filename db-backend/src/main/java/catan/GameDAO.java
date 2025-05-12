@@ -31,7 +31,8 @@ public class GameDAO extends DataAccessObject<Game> {
         "json_hexes=?, json_vertices=?, json_edges=?, json_players=?, " +
         "current_dice_roll=?, robber_location=?, " +
         "bank_brick=?, bank_ore=?, bank_sheep=?, bank_wheat=?, bank_wood=?, " +
-        "bank_year_of_plenty=?, bank_monopoly=?, bank_road_building=?, bank_victory_point=?, bank_knight=? " +
+        "bank_year_of_plenty=?, bank_monopoly=?, bank_road_building=?, bank_victory_point=?, bank_knight=?, " +
+        "in_progress=?, is_game_over=?, winner_id=? " +
         "WHERE game_id=?";
 
     public GameDAO(Connection connection) {
@@ -100,7 +101,7 @@ public class GameDAO extends DataAccessObject<Game> {
         try (PreparedStatement statement = this.connection.prepareStatement(INSERT)) {
             System.out.println("[DEBUG] Starting game creation in GameDAO");
             
-            // Initialize an empty array for player_list
+            // init empty array for player list
             System.out.println("[DEBUG] Creating player array with list: " + game.getPlayerList());
             Array playerArray = connection.createArrayOf("bigint", game.getPlayerList().toArray());
             statement.setArray(1, playerArray);
@@ -109,8 +110,7 @@ public class GameDAO extends DataAccessObject<Game> {
             statement.setBoolean(4, game.isInProgress());
             statement.setString(5, game.getGameName());
             
-            System.out.println("[DEBUG] Setting game state fields");
-            // Set game state with null checks
+            // set game state with null checks
             statement.setString(6, game.getJsonHexes() != null ? game.getJsonHexes() : "[]");
             statement.setString(7, game.getJsonVertices() != null ? game.getJsonVertices() : "[]");
             statement.setString(8, game.getJsonEdges() != null ? game.getJsonEdges() : "[]");
@@ -128,14 +128,11 @@ public class GameDAO extends DataAccessObject<Game> {
             setNullableInt(statement, 20, game.getBankVictoryPoint());
             setNullableInt(statement, 21, game.getBankKnight());
             
-            System.out.println("[DEBUG] Executing INSERT query");
             ResultSet rs = statement.executeQuery();
             if (rs.next()) {
                 long gameId = rs.getLong("game_id");
-                System.out.println("[DEBUG] Game created with ID: " + gameId);
-                game.setGameId(gameId); // Set the ID on the game object
+                game.setGameId(gameId); 
                 Game found = findById(gameId);
-                System.out.println("[DEBUG] Retrieved created game: " + found);
                 return found;
             } else {
                 System.out.println("[ERROR] No game ID returned from INSERT");
@@ -209,7 +206,10 @@ public class GameDAO extends DataAccessObject<Game> {
             setNullableInt(statement, 14, game.getBankRoadBuilding());
             setNullableInt(statement, 15, game.getBankVictoryPoint());
             setNullableInt(statement, 16, game.getBankKnight());
-            statement.setLong(17, game.getId());
+            statement.setBoolean(17, game.isInProgress());
+            statement.setBoolean(18, game.isGameOver());
+            setNullableLong(statement, 19, game.getWinnerId());
+            statement.setLong(20, game.getId());
             
             if (statement.executeUpdate() > 0) {
                 return findById(game.getId());
@@ -247,7 +247,7 @@ public class GameDAO extends DataAccessObject<Game> {
         game.setCreatedAt(rs.getTimestamp("created_at"));
         game.setGameName(rs.getString("game_name"));
         
-        // Extract game state
+        // extract game state
         game.setJsonHexes(rs.getString("json_hexes"));
         game.setJsonVertices(rs.getString("json_vertices"));
         game.setJsonEdges(rs.getString("json_edges"));
@@ -285,6 +285,14 @@ public class GameDAO extends DataAccessObject<Game> {
             statement.setInt(index, value);
         } else {
             statement.setNull(index, java.sql.Types.INTEGER);
+        }
+    }
+
+    private void setNullableLong(PreparedStatement statement, int index, Long value) throws SQLException {
+        if (value != null) {
+            statement.setLong(index, value);
+        } else {
+            statement.setNull(index, java.sql.Types.BIGINT);
         }
     }
 }

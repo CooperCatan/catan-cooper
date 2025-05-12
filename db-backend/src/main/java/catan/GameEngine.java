@@ -6,9 +6,25 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.awt.geom.Point2D;
+import com.fasterxml.jackson.databind.DeserializationFeature; 
+import java.util.Collections; 
+import java.util.Arrays; 
+import catan.BoardGenerator.BoardData; 
 
 public class GameEngine {
-    // Game state from database
+    private static final Logger logger = LoggerFactory.getLogger(GameEngine.class);
+    // --- std player colors, matches frontend's PLAYER_COLORS) ---
+    private static final List<String> PLAYER_COLORS = Arrays.asList(
+        "#FF6B6B", // Red
+        "#4ECDC4", // Blue/Teal
+        "#FFA07A", // Orange (LightSalmon)
+        "#98D8AA"  // Green
+    );
+
+    // game state being stored from database
     private long gameId;
     private String jsonHexes;
     private String jsonVertices;
@@ -17,21 +33,21 @@ public class GameEngine {
     private Long winnerId;
     private boolean isGameOver;
     
-    // Bank resources
+    // bank resources
     private int bankBrick;
     private int bankOre;
     private int bankSheep;
     private int bankWheat;
     private int bankWood;
     
-    // Development cards
+    // development cards
     private int bankYearOfPlenty;
     private int bankMonopoly;
     private int bankRoadBuilding;
     private int bankVictoryPoint;
     private int bankKnight;
 
-    // Deserialized board state
+    // deserialized board state
     private List<Hex> hexes;
     private List<Vertex> vertices;
     private List<Edge> edges;
@@ -39,7 +55,7 @@ public class GameEngine {
     private int currentDiceRoll;
     private int robberLocation;
 
-    // Constants
+    // constants for game actions 
     private static final int SETTLEMENT_BRICK = 1;
     private static final int SETTLEMENT_WOOD = 1;
     private static final int SETTLEMENT_WHEAT = 1;
@@ -55,239 +71,214 @@ public class GameEngine {
     private static final int DEVELOPMENT_CARD_WHEAT = 1;
     private static final int DEVELOPMENT_CARD_SHEEP = 1;
 
-    private static final String[] RESOURCE_TYPES = {"wood", "brick", "ore", "wheat", "sheep", "desert"};
-    private static final Integer[] PIP_VALUES = {2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12};
-    private static final int NUM_HEXES = 19;
-
     public GameEngine(long gameId) {
-        System.out.println("[DEBUG] Initializing GameEngine for game " + gameId);
+        logger.info("[GE_INIT] Initializing GameEngine for game ID: {}", gameId);
         this.gameId = gameId;
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         
-        // Try to load existing game state from database
         try (Connection connection = DriverManager.getConnection(
-            "jdbc:postgresql://db:5432/catan",  // Changed from localhost to db
+            "jdbc:postgresql://db:5432/catan",
             "postgres",
-            "postgres"
+            "password"
         )) {
             GameDAO gameDAO = new GameDAO(connection);
+            logger.info("[GE_INIT] Attempting to find game ID: {} in DAO", gameId);
             Game game = gameDAO.findById(gameId);
-            System.out.println("[DEBUG] Found game in database: " + (game != null));
-            
-            if (game != null) {
-                System.out.println("[DEBUG] Game hexes JSON: " + game.getJsonHexes());
+            logger.info("[GE_INIT] Game DTO fetched from DAO. Game Name: {}, PlayerList size: {}", 
+                        (game != null ? game.getGameName() : "NULL_GAME_DTO"), 
+                        (game != null && game.getPlayerList() != null ? game.getPlayerList().size() : "NULL_OR_EMPTY_PLAYER_LIST"));
+
+            if (game == null) {
+                logger.error("[GE_INIT] Game with ID {} not found. Throwing RuntimeException.", gameId);
+                throw new RuntimeException("Game with ID " + gameId + " not found for GameEngine.");
             }
-            
-            if (game != null && game.getJsonHexes() != null && !game.getJsonHexes().equals("[]")) {
-                System.out.println("[DEBUG] Loading existing game state");
-                // Load existing game state
-                ObjectMapper mapper = new ObjectMapper();
-                try {
-                    this.jsonHexes = game.getJsonHexes();
-                    this.jsonVertices = game.getJsonVertices();
-                    this.jsonEdges = game.getJsonEdges();
-                    this.jsonPlayers = game.getJsonPlayers();
-                    this.currentDiceRoll = game.getCurrentDiceRoll() != null ? game.getCurrentDiceRoll() : 0;
-                    this.robberLocation = game.getRobberLocation() != null ? game.getRobberLocation() : 0;
-                    this.bankBrick = game.getBankBrick() != null ? game.getBankBrick() : 19;
-                    this.bankOre = game.getBankOre() != null ? game.getBankOre() : 19;
-                    this.bankSheep = game.getBankSheep() != null ? game.getBankSheep() : 19;
-                    this.bankWheat = game.getBankWheat() != null ? game.getBankWheat() : 19;
-                    this.bankWood = game.getBankWood() != null ? game.getBankWood() : 19;
-                    this.bankYearOfPlenty = game.getBankYearOfPlenty() != null ? game.getBankYearOfPlenty() : 2;
-                    this.bankMonopoly = game.getBankMonopoly() != null ? game.getBankMonopoly() : 2;
-                    this.bankRoadBuilding = game.getBankRoadBuilding() != null ? game.getBankRoadBuilding() : 2;
-                    this.bankVictoryPoint = game.getBankVictoryPoint() != null ? game.getBankVictoryPoint() : 5;
-                    this.bankKnight = game.getBankKnight() != null ? game.getBankKnight() : 14;
-                    
-                    // Deserialize players
-                    if (game.getJsonPlayers() != null) {
-                        this.players = mapper.readValue(game.getJsonPlayers(), 
-                            mapper.getTypeFactory().constructMapType(Map.class, Long.class, Player.class));
-                    } else {
-                        this.players = new HashMap<>();
+
+            // Load or Initialize Bank and other game properties
+            logger.debug("[GE_INIT] Loading bank properties for game ID: {}", gameId);
+            this.bankBrick = game.getBankBrick() != null ? game.getBankBrick() : 19;
+            this.bankOre = game.getBankOre() != null ? game.getBankOre() : 19; 
+            this.bankSheep = game.getBankSheep() != null ? game.getBankSheep() : 19; 
+            this.bankWheat = game.getBankWheat() != null ? game.getBankWheat() : 19; 
+            this.bankWood = game.getBankWood() != null ? game.getBankWood() : 19; 
+            this.bankYearOfPlenty = game.getBankYearOfPlenty() != null ? game.getBankYearOfPlenty() : 2; 
+            this.bankMonopoly = game.getBankMonopoly() != null ? game.getBankMonopoly() : 2; 
+            this.bankRoadBuilding = game.getBankRoadBuilding() != null ? game.getBankRoadBuilding() : 2; 
+            this.bankVictoryPoint = game.getBankVictoryPoint() != null ? game.getBankVictoryPoint() : 5; 
+            this.bankKnight = game.getBankKnight() != null ? game.getBankKnight() : 14;
+            this.currentDiceRoll = game.getCurrentDiceRoll() != null ? game.getCurrentDiceRoll() : 0;
+            this.robberLocation = game.getRobberLocation() != null ? game.getRobberLocation() : -1; // default to -1 if null
+            logger.debug("[GE_INIT] Bank properties loaded. Robber initial location from DTO: {}", this.robberLocation);
+
+            if (game.isInProgress() && game.getJsonHexes() != null && !game.getJsonHexes().isEmpty() && !game.getJsonHexes().equals("[]")) {
+                logger.info("[GE_INIT] Game ID: {} is already in progress. Loading existing board state from DB.", gameId);
+                this.jsonHexes = game.getJsonHexes();
+                this.jsonVertices = game.getJsonVertices();
+                this.jsonEdges = game.getJsonEdges();
+                this.jsonPlayers = game.getJsonPlayers();
+                // load existing robber location if available and valid
+                if (this.robberLocation <= 0 && this.jsonHexes != null) { // if robber location wasn't set or is invalid, try to find desert
+                    try {
+                        List<Hex> tempHexes = Arrays.asList(mapper.readValue(this.jsonHexes, Hex[].class));
+                        for (Hex hex : tempHexes) {
+                            if ("desert".equalsIgnoreCase(hex.getType())) {
+                                this.robberLocation = hex.getId();
+                                logger.info("[GE_INIT] Found desert hex ID {} from existing jsonHexes and set as robberLocation.", this.robberLocation);
+                                break;
+                            }
+                        }
+                    } catch (Exception e_robber_find) {
+                        logger.warn("[GE_INIT] Could not parse existing jsonHexes to find desert for robber location: {}", e_robber_find.getMessage());
                     }
-                } catch (JsonProcessingException e) {
-                    throw new RuntimeException("Failed to deserialize game state", e);
+                }
+                if (this.robberLocation <= 0) {
+                     logger.warn("[GE_INIT] Robber location still invalid ({}) after checking existing DB state.", this.robberLocation);
+                }
+                 logger.debug("[GE_INIT] Existing board JSON and robber location ({}) loaded from DB.", this.robberLocation);
+                
+                if (this.jsonPlayers != null && !this.jsonPlayers.isEmpty() && !this.jsonPlayers.equals("[]") && !this.jsonPlayers.equals("{}")) {
+                    try {
+                        logger.debug("[GE_INIT] Deserializing existing jsonPlayers for game ID: {}", gameId);
+                        this.players = mapper.readValue(this.jsonPlayers,
+                            mapper.getTypeFactory().constructMapType(Map.class, Long.class, Player.class));
+                        logger.debug("[GE_INIT] jsonPlayers deserialized successfully for game ID: {}. Player count: {}", gameId, (this.players != null ? this.players.size() : 0));
+                    } catch (JsonProcessingException e_deserialize) { 
+                        logger.error("[GE_INIT] CRITICAL: Failed to deserialize jsonPlayers for game {} even after ignoring unknown properties. Error: {}", gameId, e_deserialize.getMessage(), e_deserialize);
+                        logger.warn("[GE_INIT] Falling back to re-initializing players from DTO due to deserialization error.");
+                        this.players = initializePlayersFromGameDTO(game);
+                        try { 
+                            this.jsonPlayers = mapper.writeValueAsString(this.players); 
+                            logger.info("[GE_INIT] Successfully serialized re-initialized players after deserialization failure.");
+                        } catch (JsonProcessingException e_serialize_fallback) { 
+                            logger.error("[GE_INIT] CRITICAL: Failed to serialize re-initialized players during fallback: {}", e_serialize_fallback.getMessage(), e_serialize_fallback);
+                            this.jsonPlayers = "{}"; 
+                        }
+                    }
+                } else {
+                    logger.info("[GE_INIT] jsonPlayers is empty or null for in-progress game {}. Initializing from DTO.", gameId);
+                    this.players = initializePlayersFromGameDTO(game);
+                    try {
+                       this.jsonPlayers = mapper.writeValueAsString(this.players);
+                       logger.info("[GE_INIT] Successfully serialized players initialized from DTO (jsonPlayers was initially empty).");
+                    } catch (JsonProcessingException e_player_init) {
+                        logger.error("[GE_INIT] Failed to serialize players initialized from DTO (jsonPlayers was initially empty): {}", e_player_init.getMessage(), e_player_init);
+                        this.jsonPlayers = "{}"; 
+                    }
                 }
             } else {
-                System.out.println("[DEBUG] Generating new game state");
-                // Initialize new game state
-                String boardState = generateInitialBoardState();
-                ObjectMapper mapper = new ObjectMapper();
-                try {
-                    Map<String, Object> state = mapper.readValue(boardState, Map.class);
-                    this.jsonHexes = mapper.writeValueAsString(state.get("hexes"));
-                    this.jsonVertices = mapper.writeValueAsString(state.get("vertices"));
-                    this.jsonEdges = mapper.writeValueAsString(state.get("edges"));
-                } catch (JsonProcessingException e) {
-                    throw new RuntimeException("Failed to parse board state", e);
+                logger.info("[GE_INIT] Game ID: {} is NEW or board not set up. Generating initial board state using BoardGenerator.", gameId);
+                
+                // --- Call BoardGenerator --- 
+                BoardData generatedBoard = BoardGenerator.generateNewBoard();
+                
+                if (generatedBoard == null || generatedBoard.hexes == null || generatedBoard.hexes.isEmpty()) {
+                    logger.error("[GE_INIT] CRITICAL: BoardGenerator returned null or empty board data! Cannot initialize GameEngine.");
+                    throw new RuntimeException("Failed to generate initial board state.");
                 }
                 
-                // Initialize bank resources
-                this.bankBrick = 19;
-                this.bankOre = 19;
-                this.bankSheep = 19;
-                this.bankWheat = 19;
-                this.bankWood = 19;
+                // --- Serialize generated board data to JSON strings --- 
+                try {
+                    this.jsonHexes = mapper.writeValueAsString(generatedBoard.hexes);
+                    this.jsonVertices = mapper.writeValueAsString(generatedBoard.vertices);
+                    this.jsonEdges = mapper.writeValueAsString(generatedBoard.edges);
+                } catch (JsonProcessingException e_serialize_board) {
+                     logger.error("[GE_INIT] CRITICAL: Failed to serialize generated board state to JSON: {}", e_serialize_board.getMessage(), e_serialize_board);
+                    throw new RuntimeException("Failed to serialize generated board state.", e_serialize_board);
+                }
                 
-                // Initialize development cards
-                this.bankYearOfPlenty = 2;
-                this.bankMonopoly = 2;
-                this.bankRoadBuilding = 2;
-                this.bankVictoryPoint = 5;
-                this.bankKnight = 14;
+                // --- Set robber location from generated data ---
+                this.robberLocation = generatedBoard.initialRobberLocation;
+                logger.info("[GE_INIT] Board generated. Robber location set to: {}. Serialized JSON stored.", this.robberLocation);
 
-                this.players = new HashMap<>();
+                // --- Initialize players (as it's a new game setup) --- 
+                logger.info("[GE_INIT] Initializing players from Game DTO for new game ID: {}", gameId);
+                this.players = initializePlayersFromGameDTO(game); 
+                try {
+                    this.jsonPlayers = mapper.writeValueAsString(this.players);
+                    logger.info("[GE_INIT] jsonPlayers serialized for new game ID: {}.", gameId);
+                } catch (JsonProcessingException e_serialize_new_players) {
+                    logger.error("[GE_INIT] Failed to serialize initial players state for new game: {}", e_serialize_new_players.getMessage(), e_serialize_new_players);
+                    this.jsonPlayers = "{}"; 
+                }
             }
-            
+
+            logger.info("[GE_INIT] Deserializing final board components (hexes, vertices, edges) for game ID: {}", gameId);
             deserializeBoard();
-            System.out.println("[DEBUG] Board deserialized with " + 
-                (hexes != null ? hexes.size() : 0) + " hexes, " + 
-                (vertices != null ? vertices.size() : 0) + " vertices, " + 
-                (edges != null ? edges.size() : 0) + " edges");
-        } catch (SQLException e) {
-            System.err.println("[ERROR] Database connection failed: " + e.getMessage());
-            throw new RuntimeException("Failed to connect to database", e);
+            // --- DEBUG LOG: Check edges after deserialization ---
+            if (this.edges != null && !this.edges.isEmpty()) {
+                logger.debug("[GE_INIT_DEBUG] Edges loaded after deserializeBoard(). Count: {}. First few edges:", this.edges.size());
+                for (int i = 0; i < Math.min(5, this.edges.size()); i++) {
+                    Edge edge = this.edges.get(i);
+                    logger.debug("[GE_INIT_DEBUG]   - Edge ID: {}, Occupied: {}, Owner: {}, ConnectedVertices: {}", 
+                                 edge.getId(), edge.isOccupied(), edge.getOwnerId(), 
+                                 (edge.getConnectedVertices() != null ? edge.getConnectedVertices().toString() : "null"));
+                }
+            } else {
+                logger.warn("[GE_INIT_DEBUG] No edges loaded or edges list is null after deserializeBoard().");
+            }
+            // --- END DEBUG LOG ---
+            logger.info("[GE_INIT] GameEngine construction successful for game ID: {}", gameId);
+
+        } catch (SQLException e_sql) {
+            logger.error("[GE_INIT] SQLException during GameEngine construction for game ID: {}: {}", gameId, e_sql.getMessage(), e_sql);
+            throw new RuntimeException("Failed to connect to database or query game in GameEngine", e_sql);
+        } catch (Exception e_outer) { 
+            logger.error("[GE_INIT] Unexpected Exception during GameEngine construction for game ID: {}: {}", gameId, e_outer.getMessage(), e_outer);
+            throw new RuntimeException("Unexpected error in GameEngine constructor", e_outer);
         }
+    }
+
+    // helper method to initialize the players ,ap
+    private Map<Long, Player> initializePlayersFromGameDTO(Game gameDto) {
+        logger.debug("[GE_HELPER] Initializing players from DTO. GameDto is null: {}, PlayerList is null: {}", 
+            (gameDto == null), 
+            (gameDto != null ? gameDto.getPlayerList() == null : "N/A"));
+        Map<Long, Player> initializedPlayers = new HashMap<>();
+        if (gameDto != null && gameDto.getPlayerList() != null) {
+            List<Long> playerIds = gameDto.getPlayerList(); // get the list of player IDs
+            logger.debug("[GE_HELPER] PlayerList size: {}", playerIds.size());
+            for (int i = 0; i < playerIds.size(); i++) {
+                Long accountId = playerIds.get(i);
+                logger.debug("[GE_HELPER] Creating Player object for accountId: {}", accountId);
+                Player player = new Player(accountId);
+                // assign color based on index from the static PLAYER_COLORS list
+                if (i < PLAYER_COLORS.size()) {
+                    player.setColor(PLAYER_COLORS.get(i)); // Use static list
+                    logger.debug("[GE_HELPER] Assigned color {} to player index {}", PLAYER_COLORS.get(i), i); // Use static list
+                } else {
+                    // fallback if more players than colors (e.g., reuse or default)
+                    player.setColor("#808080"); // Default to Gray
+                    logger.warn("[GE_HELPER] More players than defined colors. Assigning default gray to player index {}", i);
+                }
+                initializedPlayers.put(accountId, player);
+            }
+        }
+        logger.debug("[GE_HELPER] Finished initializing players from DTO. Count: {}", initializedPlayers.size());
+        return initializedPlayers;
     }
 
     private void deserializeBoard() {
         ObjectMapper mapper = new ObjectMapper();
         try {
             this.hexes = Arrays.asList(mapper.readValue(jsonHexes, Hex[].class));
+
             this.vertices = Arrays.asList(mapper.readValue(jsonVertices, Vertex[].class));
+
             this.edges = Arrays.asList(mapper.readValue(jsonEdges, Edge[].class));
+            logger.debug("[GE_HELPER] Board components (Hexes: {}, Vertices: {}, Edges: {}) deserialized.", 
+                         (this.hexes != null ? this.hexes.size() : 0),
+                         (this.vertices != null ? this.vertices.size() : 0),
+                         (this.edges != null ? this.edges.size() : 0));
         } catch (JsonProcessingException e) {
+            logger.error("[GE_HELPER] Failed to deserialize board state: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to deserialize board state", e);
+        } catch (Exception e) {
+             logger.error("[GE_HELPER] Unexpected error during board deserialization: {}", e.getMessage(), e);
+            throw new RuntimeException("Unexpected error during board deserialization", e);
         }
     }
 
-    private String generateInitialBoardState() {
-        System.out.println("[DEBUG] Starting board generation for game " + gameId);
-        ObjectMapper mapper = new ObjectMapper();
-        try {
-            // Generate hexes
-            List<Hex> hexes = new ArrayList<>();
-            List<String> resourceTypes = new ArrayList<>();
-            List<Integer> pipValues = new ArrayList<>(Arrays.asList(PIP_VALUES));
-            
-            System.out.println("[DEBUG] Initial pip values: " + pipValues);
-            
-            // Add resources according to standard Catan rules:
-            // 4 wood, 4 wheat, 4 sheep, 3 brick, 3 ore, 1 desert
-            resourceTypes.addAll(Arrays.asList("wood", "wood", "wood", "wood"));
-            resourceTypes.addAll(Arrays.asList("wheat", "wheat", "wheat", "wheat"));
-            resourceTypes.addAll(Arrays.asList("sheep", "sheep", "sheep", "sheep"));
-            resourceTypes.addAll(Arrays.asList("brick", "brick", "brick"));
-            resourceTypes.addAll(Arrays.asList("ore", "ore", "ore"));
-            
-            System.out.println("[DEBUG] Initial resource types: " + resourceTypes);
-            
-            // Shuffle both lists
-            Collections.shuffle(resourceTypes);
-            Collections.shuffle(pipValues);
-            
-            System.out.println("[DEBUG] Shuffled resource types: " + resourceTypes);
-            System.out.println("[DEBUG] Shuffled pip values: " + pipValues);
-            
-            // Create hexes
-            for (int i = 0; i < NUM_HEXES; i++) {
-                Hex hex = new Hex();
-                hex.setId(i + 1);
-                
-                // Place desert in the middle (index 9)
-                if (i == 9) {
-                    hex.setType("desert");
-                    hex.setHasRobber(true);
-                    hex.setPipValue(0);  // Desert has no pip value
-                    System.out.println("[DEBUG] Placed desert at index " + i + " with coordinates (" + calculateHexX(i) + "," + calculateHexY(i) + ")");
-                } else {
-                    int resourceIndex = i > 9 ? i - 1 : i;
-                    int pipIndex = i > 9 ? i - 1 : i;
-                    hex.setType(resourceTypes.get(resourceIndex));
-                    hex.setPipValue(pipValues.get(pipIndex));
-                    hex.setHasRobber(false);
-                    System.out.println("[DEBUG] Placed " + resourceTypes.get(resourceIndex) + " at index " + i + 
-                        " with pip value " + pipValues.get(pipIndex) + 
-                        " and coordinates (" + calculateHexX(i) + "," + calculateHexY(i) + ")");
-                }
-                
-                // Set coordinates based on the hexagonal Catan board layout
-                hex.setX(calculateHexX(i));
-                hex.setY(calculateHexY(i));
-                
-                hexes.add(hex);
-            }
-            
-            // Generate vertices
-            List<Vertex> vertices = new ArrayList<>();
-            for (int i = 0; i < 54; i++) {  // Standard Catan has 54 vertices
-                Vertex vertex = new Vertex();
-                vertex.setId(i + 1);
-                vertex.setOccupied(false);
-                vertex.setBuildingType(null);
-                vertex.setOwnerId(null);
-                vertices.add(vertex);
-            }
-            System.out.println("[DEBUG] Generated " + vertices.size() + " vertices");
-            
-            // Generate edges
-            List<Edge> edges = new ArrayList<>();
-            for (int i = 0; i < 72; i++) {  // Standard Catan has 72 edges
-                Edge edge = new Edge();
-                edge.setId(i + 1);
-                edge.setOccupied(false);
-                edge.setOwnerId(null);
-                edges.add(edge);
-            }
-            System.out.println("[DEBUG] Generated " + edges.size() + " edges");
-            
-            // Convert to JSON
-            Map<String, Object> boardState = new HashMap<>();
-            boardState.put("hexes", hexes);
-            boardState.put("vertices", vertices);
-            boardState.put("edges", edges);
-            
-            String jsonBoardState = mapper.writeValueAsString(boardState);
-            System.out.println("[DEBUG] Generated board state JSON: " + jsonBoardState);
-            return jsonBoardState;
-        } catch (JsonProcessingException e) {
-            System.err.println("[ERROR] Failed to generate initial board state: " + e.getMessage());
-            throw new RuntimeException("Failed to generate initial board state", e);
-        }
-    }
-
-    private double calculateHexX(int index) {
-        // Calculate x coordinate based on hex position in hexagonal grid
-        if (index < 3) {  // First row (3 hexes)
-            return index * 2 + 2;
-        } else if (index < 7) {  // Second row (4 hexes)
-            return (index - 3) * 2 + 1;
-        } else if (index < 12) {  // Third row (5 hexes)
-            return (index - 7) * 2;
-        } else if (index < 16) {  // Fourth row (4 hexes)
-            return (index - 12) * 2 + 1;
-        } else {  // Fifth row (3 hexes)
-            return (index - 16) * 2 + 2;
-        }
-    }
-
-    private double calculateHexY(int index) {
-        // Calculate y coordinate based on hex position in hexagonal grid
-        if (index < 3) {  // First row
-            return 0;
-        } else if (index < 7) {  // Second row
-            return 1.5;
-        } else if (index < 12) {  // Third row
-            return 3;
-        } else if (index < 16) {  // Fourth row
-            return 4.5;
-        } else {  // Fifth row
-            return 6;
-        }
-    }
-
-    // Game Actions
+    // game actions
 
     public boolean placeSettlement(long playerId, long vertexId, boolean initialPlacement) {
         Player player = players.get(playerId);
@@ -300,35 +291,35 @@ public class GameEngine {
             return false;
         }
 
-        // Check distance rule
+        // check distance rule
         if (hasAdjacentSettlement((int)vertexId)) {
             return false;
         }
 
-        // Check if player has a connected road (except during initial placement)
+        // check if player has a connected road (except during initial placement)
         if (!initialPlacement && !hasConnectedRoad(playerId, (int)vertexId)) {
             return false;
         }
 
-        // Check resources (except during initial placement)
+        // check resources (except during initial placement)
         if (!initialPlacement) {
             if (!player.hasResources(SETTLEMENT_BRICK, 0, SETTLEMENT_SHEEP, SETTLEMENT_WHEAT, SETTLEMENT_WOOD)) {
                 return false;
             }
             
-            // Deduct resources
+            // deduct resources
             player.deductResources(SETTLEMENT_BRICK, 0, SETTLEMENT_SHEEP, SETTLEMENT_WHEAT, SETTLEMENT_WOOD);
             updateBankResources(-SETTLEMENT_BRICK, 0, -SETTLEMENT_SHEEP, -SETTLEMENT_WHEAT, -SETTLEMENT_WOOD);
         }
 
-        // Place settlement
+        // place settlement
         vertex.setOccupied(true);
         vertex.setOwnerId(playerId);
         vertex.setBuildingType("settlement");
         player.incrementSettlements();
         player.addVictoryPoint();
 
-        // Persist changes
+        // persist changes
         persistGameState();
 
         return true;
@@ -347,22 +338,22 @@ public class GameEngine {
             return false;
         }
 
-        // Check resources
+        // check resources
         if (!player.hasResources(0, CITY_ORE, 0, CITY_WHEAT, 0)) {
             return false;
         }
 
-        // Deduct resources
+        // deduct resources
         player.deductResources(0, CITY_ORE, 0, CITY_WHEAT, 0);
         updateBankResources(0, -CITY_ORE, 0, -CITY_WHEAT, 0);
 
-        // Upgrade to city
+        // upgrade to city
         vertex.setBuildingType("city");
         player.decrementSettlements();
         player.incrementCities();
         player.addVictoryPoint();
 
-        // Persist changes
+        // persist changes
         persistGameState();
 
         return true;
@@ -379,31 +370,31 @@ public class GameEngine {
             return false;
         }
 
-        // Check if road is connected to player's existing road or settlement (except during initial placement)
+        // check if road is connected to player's existing road or settlement (except during initial placement)
         if (!initialPlacement && !isValidRoadPlacement(playerId, (int)edgeId)) {
             return false;
         }
 
-        // Check resources (except during initial placement)
+        // check resources (except during initial placement)
         if (!initialPlacement) {
             if (!player.hasResources(ROAD_BRICK, 0, 0, 0, ROAD_WOOD)) {
                 return false;
             }
             
-            // Deduct resources
+            // deduct resources
             player.deductResources(ROAD_BRICK, 0, 0, 0, ROAD_WOOD);
             updateBankResources(-ROAD_BRICK, 0, 0, 0, -ROAD_WOOD);
         }
 
-        // Place road
+        // place road
         edge.setOccupied(true);
         edge.setOwnerId(playerId);
         player.incrementRoads();
 
-        // Check for longest road
+        // check for longest road
         updateLongestRoad();
 
-        // Persist changes
+        // persist changes
         persistGameState();
 
         return true;
@@ -415,21 +406,21 @@ public class GameEngine {
             return false;
         }
 
-        // Check if development cards are available
+        // check if development cards are available
         if (bankKnight + bankYearOfPlenty + bankMonopoly + bankRoadBuilding + bankVictoryPoint == 0) {
             return false;
         }
 
-        // Check resources
+        // check resources
         if (!player.hasResources(0, DEVELOPMENT_CARD_ORE, DEVELOPMENT_CARD_SHEEP, DEVELOPMENT_CARD_WHEAT, 0)) {
             return false;
         }
 
-        // Deduct resources
+        // deduct resources
         player.deductResources(0, DEVELOPMENT_CARD_ORE, DEVELOPMENT_CARD_SHEEP, DEVELOPMENT_CARD_WHEAT, 0);
         updateBankResources(0, -DEVELOPMENT_CARD_ORE, -DEVELOPMENT_CARD_SHEEP, -DEVELOPMENT_CARD_WHEAT, 0);
 
-        // Randomly select a development card
+        // randomly select a development card
         String cardType = getRandomDevelopmentCard();
         if (cardType != null) {
             player.addDevelopmentCard(cardType);
@@ -445,10 +436,10 @@ public class GameEngine {
             return false;
         }
 
-        // Move robber
+        // move robber
         robberLocation = (int)newRobberHex;
 
-        // Rob player
+        // rob player
         Player robbedPlayer = players.get(robbedPlayerId);
         if (robbedPlayer != null && robbedPlayer.getTotalResources() > 0) {
             String stolenResource = robbedPlayer.getRandomResource();
@@ -458,7 +449,7 @@ public class GameEngine {
             }
         }
 
-        // Use knight
+        // use knight
         player.useKnight();
         updateLargestArmy();
 
@@ -471,18 +462,18 @@ public class GameEngine {
             return false;
         }
 
-        // Check if requested resources are available in bank
+        // check if requested resources are available in bank
         if (!hasEnoughInBank(resource1, 1) || !hasEnoughInBank(resource2, 1)) {
             return false;
         }
 
-        // Give resources to player
+        // give resources to player
         player.addResource(resource1, 1);
         player.addResource(resource2, 1);
         updateBankResource(resource1, -1);
         updateBankResource(resource2, -1);
 
-        // Use card
+        // use card
         player.useYearOfPlenty();
         return true;
     }
@@ -493,7 +484,7 @@ public class GameEngine {
             return false;
         }
 
-        // Collect all of the specified resource from other players
+        // collect all of the specified resource from other players
         int totalCollected = 0;
         for (Player otherPlayer : players.values()) {
             if (otherPlayer.getAccountId() != playerId) {
@@ -503,10 +494,10 @@ public class GameEngine {
             }
         }
 
-        // Give collected resources to player
+        // give collected resources to player
         player.addResource(resource, totalCollected);
 
-        // Use card
+        // use card
         player.useMonopoly();
         return true;
     }
@@ -517,7 +508,7 @@ public class GameEngine {
             return false;
         }
 
-        // Try to build both roads
+        // try to build both roads
         boolean firstRoad = buildRoad(playerId, edgeId1, true);
         boolean secondRoad = buildRoad(playerId, edgeId2, true);
 
@@ -526,7 +517,7 @@ public class GameEngine {
             return true;
         }
 
-        // If either road failed, undo the successful one
+        // if either road failed, undo the successful one
         if (firstRoad) {
             undoRoad(edgeId1);
         }
@@ -534,7 +525,7 @@ public class GameEngine {
         return false;
     }
 
-    // Helper methods
+    // helper methods
 
     private boolean hasAdjacentSettlement(long vertexId) {
         Vertex vertex = vertices.get((int)vertexId);
@@ -561,7 +552,7 @@ public class GameEngine {
     private boolean isValidRoadPlacement(long playerId, long edgeId) {
         Edge edge = edges.get((int)edgeId);
         
-        // Check connected vertices
+        // check connected vertices
         for (int vertexId : edge.getConnectedVertices()) {
             Vertex vertex = vertices.get(vertexId);
             if (vertex.isOccupied() && vertex.getOwnerId() == playerId) {
@@ -569,7 +560,7 @@ public class GameEngine {
             }
         }
 
-        // Check connected edges
+        // check connected edges
         for (int connectedEdgeId : edge.getConnectedEdges()) {
             Edge connectedEdge = edges.get(connectedEdgeId);
             if (connectedEdge.isOccupied() && connectedEdge.getOwnerId() == playerId) {
@@ -592,7 +583,7 @@ public class GameEngine {
             }
         }
 
-        // Update longest road status
+        // update longest road status
         if (maxRoadLength >= 5) {
             for (Player player : players.values()) {
                 if (player.getAccountId() == longestRoadPlayerId) {
@@ -612,7 +603,7 @@ public class GameEngine {
         Set<Integer> visited = new HashSet<>();
         int maxLength = 0;
 
-        // Start DFS from each edge owned by the player
+        // start DFS from each edge owned by the player
         for (int i = 0; i < edges.size(); i++) {
             Edge edge = edges.get(i);
             if (edge.isOccupied() && edge.getOwnerId() == playerId) {
@@ -633,7 +624,7 @@ public class GameEngine {
         Edge edge = edges.get(edgeId);
         int maxLength = 1;
 
-        // Explore connected edges
+        // explore connected edges
         for (int connectedEdgeId : edge.getConnectedEdges()) {
             Edge connectedEdge = edges.get(connectedEdgeId);
             if (connectedEdge.isOccupied() && connectedEdge.getOwnerId() == playerId) {
@@ -645,7 +636,7 @@ public class GameEngine {
     }
 
     private void updateLargestArmy() {
-        int maxKnights = 2;  // Minimum 3 knights required
+        int maxKnights = 2;  // minimum 3 knights required for the status
         Long largestArmyPlayerId = null;
 
         for (Player player : players.values()) {
@@ -655,7 +646,7 @@ public class GameEngine {
             }
         }
 
-        // Update largest army status
+        // update largest army status
         if (largestArmyPlayerId != null) {
             for (Player player : players.values()) {
                 if (player.getAccountId() == largestArmyPlayerId) {
@@ -744,43 +735,72 @@ public class GameEngine {
     }
 
     private void persistGameState() {
-        try (Connection connection = DriverManager.getConnection(
-            "jdbc:postgresql://localhost:5432/catan",
-            "postgres",
-            "postgres"
-        )) {
+        logger.debug("[GE_PERSIST] Attempting to persist game state for game ID: {}", this.gameId);
+        String dbUrl = "jdbc:postgresql://db:5432/catan";
+        String dbUser = "postgres";
+        String dbPassword = "password"; 
+
+        // use try-with-resources for the Connection
+        try (Connection connection = DriverManager.getConnection(dbUrl, dbUser, dbPassword)) {
+            logger.debug("[GE_PERSIST] Database connection successful for game ID: {}", this.gameId);
             GameDAO gameDAO = new GameDAO(connection);
-            Game game = gameDAO.findById(gameId);
+            Game game = gameDAO.findById(gameId); 
+
             if (game != null) {
                 ObjectMapper mapper = new ObjectMapper();
+                mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+                
+                String jsonHexesStr, jsonVerticesStr, jsonEdgesStr, jsonPlayersStr; 
+                
                 try {
-                    game.setJsonHexes(mapper.writeValueAsString(hexes));
-                    game.setJsonVertices(mapper.writeValueAsString(vertices));
-                    game.setJsonEdges(mapper.writeValueAsString(edges));
-                    game.setJsonPlayers(mapper.writeValueAsString(players));
-                    game.setCurrentDiceRoll(currentDiceRoll);
-                    game.setRobberLocation(robberLocation);
-                    game.setBankBrick(bankBrick);
-                    game.setBankOre(bankOre);
-                    game.setBankSheep(bankSheep);
-                    game.setBankWheat(bankWheat);
-                    game.setBankWood(bankWood);
-                    game.setBankYearOfPlenty(bankYearOfPlenty);
-                    game.setBankMonopoly(bankMonopoly);
-                    game.setBankRoadBuilding(bankRoadBuilding);
-                    game.setBankVictoryPoint(bankVictoryPoint);
-                    game.setBankKnight(bankKnight);
-                    gameDAO.updateGameState(game);
+                    logger.debug("[GE_PERSIST] Serializing game state components for game ID: {}", this.gameId);
+                    jsonHexesStr = mapper.writeValueAsString(this.hexes);
+                    jsonVerticesStr = mapper.writeValueAsString(this.vertices);
+                    jsonEdgesStr = mapper.writeValueAsString(this.edges);
+                    jsonPlayersStr = mapper.writeValueAsString(this.players);
                 } catch (JsonProcessingException e) {
+                    logger.error("[GE_PERSIST] Failed to serialize game state for game ID {}: {}", this.gameId, e.getMessage(), e);
                     throw new RuntimeException("Failed to serialize game state", e);
                 }
+
+                //  update the Game DTO
+                game.setJsonHexes(jsonHexesStr);
+                game.setJsonVertices(jsonVerticesStr);
+                game.setJsonEdges(jsonEdgesStr);
+                game.setJsonPlayers(jsonPlayersStr);
+                game.setCurrentDiceRoll(this.currentDiceRoll);
+                game.setRobberLocation(this.robberLocation);
+                game.setBankBrick(this.bankBrick);
+                game.setBankOre(this.bankOre);
+                game.setBankSheep(this.bankSheep);
+                game.setBankWheat(this.bankWheat);
+                game.setBankWood(this.bankWood);
+                game.setBankYearOfPlenty(this.bankYearOfPlenty);
+                game.setBankMonopoly(this.bankMonopoly);
+                game.setBankRoadBuilding(this.bankRoadBuilding);
+                game.setBankVictoryPoint(this.bankVictoryPoint);
+                game.setBankKnight(this.bankKnight);
+
+                // persist the updated Game DTO 
+                logger.debug("[GE_PERSIST] Calling gameDAO.updateGameState for game ID: {}", this.gameId);
+                gameDAO.updateGameState(game); 
+                logger.info("[GE_PERSIST] Game state successfully persisted for game ID: {}", this.gameId);
+
+            } else {
+                logger.warn("[GE_PERSIST] Game with ID {} not found by DAO during persist operation. Cannot save state.", this.gameId);
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to connect to database", e);
+            logger.error("[GE_PERSIST] SQLException occurred during database operation for game ID {}: {}", this.gameId, e.getMessage(), e);
+            if (e.getMessage().contains("authentication failed") || e.getMessage().contains("Connection refused")) {
+                 logger.error("[GE_PERSIST] DB Connection attempt details - URL: {}, User: {}", dbUrl, dbUser);
+            }
+            throw new RuntimeException("Database error during game state persistence", e);
+        } catch (Exception e) { 
+            logger.error("[GE_PERSIST] Unexpected exception during persistGameState for game ID {}: {}", this.gameId, e.getMessage(), e);
+            throw new RuntimeException("Unexpected error during game state persistence", e);
         }
     }
 
-    // Getters and Setters
     public long getGameId() { return gameId; }
     public void setGameId(long gameId) { this.gameId = gameId; }
 
@@ -805,7 +825,6 @@ public class GameEngine {
     public String getJsonPlayers() { return jsonPlayers; }
     public void setJsonPlayers(String jsonPlayers) { 
         this.jsonPlayers = jsonPlayers;
-        // Deserialize players when jsonPlayers is updated
         if (jsonPlayers != null) {
             try {
                 ObjectMapper mapper = new ObjectMapper();
@@ -864,4 +883,105 @@ public class GameEngine {
     
     public int getRobberLocation() { return robberLocation; }
     public void setRobberLocation(int robberLocation) { this.robberLocation = robberLocation; }
+
+    public boolean placeInitialSettlement(long accountId, int vertexId, boolean isSecondRoundPlacement) {
+        logger.debug("[GE_SETUP_SETTLE] START - accountId: {}, vertexId: {}, isSecond: {}", 
+                    accountId, vertexId, isSecondRoundPlacement);
+
+        Vertex targetVertex = null;
+        logger.debug("[GE_SETUP_SETTLE] Finding vertex with ID: {}", vertexId);
+        for (Vertex v : this.vertices) {
+            if (v.getId() == vertexId) {
+                targetVertex = v;
+                break;
+            }
+        }
+
+        if (targetVertex == null) {
+            logger.warn("[GE_SETUP_SETTLE] FAIL - Vertex {} not found in game engine's vertices list.", vertexId);
+            return false;
+        }
+        logger.debug("[GE_SETUP_SETTLE] Found vertex: {}. Checking occupation status.", vertexId);
+
+        if (targetVertex.isOccupied()) {
+            logger.warn("[GE_SETUP_SETTLE] FAIL - Vertex {} is already occupied by player {}. Cannot place settlement.", vertexId, targetVertex.getOwnerId());
+            return false;
+        }
+        logger.debug("[GE_SETUP_SETTLE] Vertex {} is not occupied. Checking distance rule.", vertexId);
+
+        // distance rule Check
+        if (hasAdjacentSettlement(vertexId)) {
+             logger.warn("[GE_SETUP_SETTLE] FAIL - Placement at vertex {} violates distance rule due to occupied adjacent vertex.", vertexId);
+             return false;
+        }
+        logger.debug("[GE_SETUP_SETTLE] Distance rule check passed for vertex {}.", vertexId);
+        
+        logger.debug("[GE_SETUP_SETTLE] Finding player with accountId: {}", accountId);
+        Player player = this.players.get(accountId);
+        if (player == null) {
+            logger.warn("[GE_SETUP_SETTLE] FAIL - Player with accountId {} not found in game engine players map.", accountId);
+            return false; // Should not happen if GameEngine initialized correctly
+        }
+        logger.debug("[GE_SETUP_SETTLE] Found player: {}. Proceeding to place settlement.", accountId);
+
+        // all checks passed, place the settlement
+        try {
+            logger.debug("[GE_SETUP_SETTLE] Setting properties on vertex {}: ownerId={}, buildingType=\"settlement\", occupied=true", vertexId, accountId);
+            targetVertex.setOwnerId(accountId);
+            targetVertex.setBuildingType("settlement");
+            targetVertex.setOccupied(true);
+            logger.info("[GE_SETUP_SETTLE] Vertex {} successfully occupied by account {}. Updating player stats.", vertexId, accountId);
+
+            player.incrementSettlements();
+            player.addVictoryPoint(); // Initial settlements grant VPs
+            logger.debug("[GE_SETUP_SETTLE] Player {} settlements incremented to {}, VPs to {}. Checking if second round placement.", 
+                         accountId, player.getNumSettlements(), player.getVictoryPoints());
+
+            // grant resources if it's the second placement in setup phase
+            if (isSecondRoundPlacement) {
+                logger.info("[GE_SETUP_SETTLE] Second round placement for account {}. Attempting to grant initial resources.", accountId);
+                List<Hex> adjacentHexesToSettlement = new ArrayList<>();
+                List<Integer> adjacentHexIds = targetVertex.getAdjacentHexes(); // This list is currently expected to be empty
+                logger.debug("[GE_SETUP_SETTLE] Vertex {} adjacentHexes count: {}", vertexId, (adjacentHexIds == null ? 0 : adjacentHexIds.size()));
+                if (adjacentHexIds != null && !adjacentHexIds.isEmpty()) { // This block will likely be skipped
+                    logger.debug("[GE_SETUP_SETTLE] Finding adjacent hex objects for vertex {}...", vertexId);
+                    for (int hexId : adjacentHexIds) {
+                         logger.trace("[GE_SETUP_SETTLE] Looking for hex ID: {}", hexId);
+                        for (Hex hex : this.hexes) {
+                            if (hex.getId() == hexId) {
+                                adjacentHexesToSettlement.add(hex);
+                                 logger.trace("[GE_SETUP_SETTLE] Added hex {} to list for resource granting.", hexId);
+                                break;
+                            }
+                        }
+                    }
+                    if (!adjacentHexesToSettlement.isEmpty()) {
+                         logger.debug("[GE_SETUP_SETTLE] Granting resources from {} adjacent hexes to player {}. Check player state for details.", 
+                                      adjacentHexesToSettlement.size(), accountId);
+                        player.addInitialResourcesFromSettlement(adjacentHexesToSettlement);
+                    } else {
+                        logger.warn("[GE_SETUP_SETTLE] Found adjacent hex IDs for vertex {}, but could not find corresponding Hex objects.", vertexId);
+                    }
+                } else {
+                    logger.warn("[GE_SETUP_SETTLE] No adjacent hex IDs found for vertex {} (or list was null/empty). Cannot grant initial resources.", vertexId);
+                }
+            } else {
+                 logger.debug("[GE_SETUP_SETTLE] Not second round placement, skipping resource grant.");
+            }
+
+            logger.debug("[GE_SETUP_SETTLE] Attempting to persist game state after placing settlement for account {} at vertex {}.", accountId, vertexId);
+            persistGameState(); // Save changes to DB via GameDAO
+            logger.info("[GE_SETUP_SETTLE] SUCCESS - Initial settlement placed and game state persisted for account {} at vertex {}.", accountId, vertexId);
+            return true;
+        } catch (Exception e) {
+             logger.error("[GE_SETUP_SETTLE] FAIL - Exception occurred *after* checks passed, during vertex/player update or persist: {}", e.getMessage(), e);
+             // Attempt to rollback vertex changes? Might be complex depending on state.
+             // For now, just log the error and return false.
+             // Consider adding rollback logic if needed.
+             return false;
+        }
+        // courtesy of claude
+    }
+
+
 }
