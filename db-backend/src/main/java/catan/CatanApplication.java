@@ -35,10 +35,10 @@ public class CatanApplication {
         SpringApplication.run(CatanApplication.class, args);
     }
 
-    // Rate limiter configuration - 1 request per minute
+    // Rate limiter configuration - 3 requests per minute
     private Bucket createBucket() {
         return Bucket4j.builder()
-            .addLimit(Bandwidth.simple(1, Duration.ofMinutes(1)))
+            .addLimit(Bandwidth.simple(3, Duration.ofMinutes(1)))
             .build();
     }
 
@@ -538,6 +538,119 @@ public class CatanApplication {
         } catch (SQLException e) {
             e.printStackTrace();
             return ResponseEntity.internalServerError().body("Database error");
+        }
+    }
+
+    // Get all accounts endpoint
+    @GetMapping("/api/accounts")
+    public ResponseEntity<?> getAllAccounts(@RequestHeader("Authorization") String idToken) {
+        try {
+            // Verify Firebase token
+            firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
+
+            try (Connection conn = dcm.getConnection()) {
+                AccountDAO accountDAO = new AccountDAO(conn);
+                List<Account> accounts = accountDAO.findAll();
+                return ResponseEntity.ok().body(accounts);
+            }
+        } catch (FirebaseAuthException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid token");
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("Database error");
+        }
+    }
+
+    @PostMapping("/api/games/{gameId}/start")
+    public ResponseEntity<?> startGame(
+            @PathVariable long gameId,
+            @RequestHeader("Authorization") String idToken) {
+        System.out.println("[DEBUG] Starting game " + gameId);
+        try {
+            // Verify Firebase token
+            String email = firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
+            System.out.println("[DEBUG] User " + email + " attempting to start game");
+
+            try (Connection conn = dcm.getConnection()) {
+                // Get user's account ID
+                AccountDAO accountDAO = new AccountDAO(conn);
+                Account account = accountDAO.findByEmail(email);
+                if (account == null) {
+                    System.err.println("[ERROR] Account not found for email: " + email);
+                    return ResponseEntity.badRequest().body("Account not found");
+                }
+                System.out.println("[DEBUG] Found account: " + account.getId());
+
+                GameDAO gameDAO = new GameDAO(conn);
+                Game game = gameDAO.findById(gameId);
+                if (game == null) {
+                    System.err.println("[ERROR] Game not found: " + gameId);
+                    return ResponseEntity.notFound().build();
+                }
+                System.out.println("[DEBUG] Found game: " + game.getId());
+
+                // Check if user is the host (first player)
+                if (game.getPlayerList().isEmpty() || game.getPlayerList().get(0) != account.getId()) {
+                    System.err.println("[ERROR] User " + account.getId() + " is not the host of game " + gameId);
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only the host can start the game");
+                }
+
+                // Check if game can be started
+                if (game.isGameOver() || game.isInProgress() || game.getPlayerList().size() < 2) {
+                    System.err.println("[ERROR] Game cannot be started. isGameOver: " + game.isGameOver() + 
+                        ", inProgress: " + game.isInProgress() + 
+                        ", playerCount: " + game.getPlayerList().size());
+                    return ResponseEntity.badRequest().body("Game cannot be started");
+                }
+
+                // Initialize game engine to generate random board
+                System.out.println("[DEBUG] Initializing GameEngine for game " + gameId);
+                GameEngine engine = new GameEngine(gameId);
+                
+                // Update game state with generated board
+                System.out.println("[DEBUG] Updating game state with generated board");
+                game.setJsonHexes(engine.getJsonHexes());
+                game.setJsonVertices(engine.getJsonVertices());
+                game.setJsonEdges(engine.getJsonEdges());
+                game.setInProgress(true);
+                gameDAO.updateGameState(game);
+                System.out.println("[DEBUG] Game state updated successfully");
+
+                // Get the full game data with player information
+                List<Account> players = new ArrayList<>();
+                for (Long playerId : game.getPlayerList()) {
+                    Account player = accountDAO.findById(playerId);
+                    if (player != null) {
+                        players.add(player);
+                    }
+                }
+                game.setPlayers(players);
+                System.out.println("[DEBUG] Added " + players.size() + " players to game response");
+
+                // Create response
+                Map<String, Object> response = Map.of(
+                    "game", game,
+                    "boardState", Map.of(
+                        "hexes", engine.getHexes(),
+                        "vertices", engine.getVertices(),
+                        "edges", engine.getEdges()
+                    )
+                );
+                System.out.println("[DEBUG] Sending response with board state. Hex count: " + 
+                    engine.getHexes().size() + ", Vertex count: " + 
+                    engine.getVertices().size() + ", Edge count: " + 
+                    engine.getEdges().size());
+
+                return ResponseEntity.ok().body(response);
+            }
+        } catch (SQLException e) {
+            System.err.println("[ERROR] Database error in startGame: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("Database error");
+        } catch (FirebaseAuthException e) {
+            System.err.println("[ERROR] Firebase authentication error: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid token");
         }
     }
 }

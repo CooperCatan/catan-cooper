@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth, signOut, User } from 'firebase/auth';
 import { PLAYER_COLORS } from './GameBoard';
-import { XCircle, Home, Settings, X } from 'lucide-react';
+import { XCircle, Home, Settings, X, Trophy } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
 
 interface Game {
@@ -438,9 +438,21 @@ const GameLobby = () => {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20">
-              <span className="text-gray-700/90 font-medium">{username}</span>
-            </div>
+            {account && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl border border-white/20">
+                <span className="text-gray-700/90 font-medium">
+                  {account.username}
+                </span>
+                <span className="text-sm text-gray-600/90">ELO {account.elo}</span>
+              </div>
+            )}
+            <button
+              onClick={() => navigate('/leaderboard')}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-gray-700/90 text-sm font-medium rounded-xl hover:bg-white/30 transition-all shadow-lg hover:shadow-xl border border-white/20"
+            >
+              <Trophy size={16} />
+              <span>Leaderboard</span>
+            </button>
             <button
               onClick={() => navigate('/settings')}
               className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-gray-700/90 text-sm font-medium rounded-xl hover:bg-white/30 transition-all shadow-lg hover:shadow-xl border border-white/20"

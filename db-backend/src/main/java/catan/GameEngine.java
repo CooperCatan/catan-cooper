@@ -60,18 +60,25 @@ public class GameEngine {
     private static final int NUM_HEXES = 19;
 
     public GameEngine(long gameId) {
+        System.out.println("[DEBUG] Initializing GameEngine for game " + gameId);
         this.gameId = gameId;
         
         // Try to load existing game state from database
         try (Connection connection = DriverManager.getConnection(
-            "jdbc:postgresql://localhost:5432/catan",
+            "jdbc:postgresql://db:5432/catan",  // Changed from localhost to db
             "postgres",
             "postgres"
         )) {
             GameDAO gameDAO = new GameDAO(connection);
             Game game = gameDAO.findById(gameId);
+            System.out.println("[DEBUG] Found game in database: " + (game != null));
             
-            if (game != null && game.getJsonHexes() != null) {
+            if (game != null) {
+                System.out.println("[DEBUG] Game hexes JSON: " + game.getJsonHexes());
+            }
+            
+            if (game != null && game.getJsonHexes() != null && !game.getJsonHexes().equals("[]")) {
+                System.out.println("[DEBUG] Loading existing game state");
                 // Load existing game state
                 ObjectMapper mapper = new ObjectMapper();
                 try {
@@ -103,6 +110,7 @@ public class GameEngine {
                     throw new RuntimeException("Failed to deserialize game state", e);
                 }
             } else {
+                System.out.println("[DEBUG] Generating new game state");
                 // Initialize new game state
                 String boardState = generateInitialBoardState();
                 ObjectMapper mapper = new ObjectMapper();
@@ -133,7 +141,12 @@ public class GameEngine {
             }
             
             deserializeBoard();
+            System.out.println("[DEBUG] Board deserialized with " + 
+                (hexes != null ? hexes.size() : 0) + " hexes, " + 
+                (vertices != null ? vertices.size() : 0) + " vertices, " + 
+                (edges != null ? edges.size() : 0) + " edges");
         } catch (SQLException e) {
+            System.err.println("[ERROR] Database connection failed: " + e.getMessage());
             throw new RuntimeException("Failed to connect to database", e);
         }
     }
@@ -150,12 +163,15 @@ public class GameEngine {
     }
 
     private String generateInitialBoardState() {
+        System.out.println("[DEBUG] Starting board generation for game " + gameId);
         ObjectMapper mapper = new ObjectMapper();
         try {
             // Generate hexes
             List<Hex> hexes = new ArrayList<>();
             List<String> resourceTypes = new ArrayList<>();
             List<Integer> pipValues = new ArrayList<>(Arrays.asList(PIP_VALUES));
+            
+            System.out.println("[DEBUG] Initial pip values: " + pipValues);
             
             // Add resources according to standard Catan rules:
             // 4 wood, 4 wheat, 4 sheep, 3 brick, 3 ore, 1 desert
@@ -165,9 +181,14 @@ public class GameEngine {
             resourceTypes.addAll(Arrays.asList("brick", "brick", "brick"));
             resourceTypes.addAll(Arrays.asList("ore", "ore", "ore"));
             
+            System.out.println("[DEBUG] Initial resource types: " + resourceTypes);
+            
             // Shuffle both lists
             Collections.shuffle(resourceTypes);
             Collections.shuffle(pipValues);
+            
+            System.out.println("[DEBUG] Shuffled resource types: " + resourceTypes);
+            System.out.println("[DEBUG] Shuffled pip values: " + pipValues);
             
             // Create hexes
             for (int i = 0; i < NUM_HEXES; i++) {
@@ -179,12 +200,16 @@ public class GameEngine {
                     hex.setType("desert");
                     hex.setHasRobber(true);
                     hex.setPipValue(0);  // Desert has no pip value
+                    System.out.println("[DEBUG] Placed desert at index " + i + " with coordinates (" + calculateHexX(i) + "," + calculateHexY(i) + ")");
                 } else {
                     int resourceIndex = i > 9 ? i - 1 : i;
                     int pipIndex = i > 9 ? i - 1 : i;
                     hex.setType(resourceTypes.get(resourceIndex));
                     hex.setPipValue(pipValues.get(pipIndex));
                     hex.setHasRobber(false);
+                    System.out.println("[DEBUG] Placed " + resourceTypes.get(resourceIndex) + " at index " + i + 
+                        " with pip value " + pipValues.get(pipIndex) + 
+                        " and coordinates (" + calculateHexX(i) + "," + calculateHexY(i) + ")");
                 }
                 
                 // Set coordinates based on the hexagonal Catan board layout
@@ -204,6 +229,7 @@ public class GameEngine {
                 vertex.setOwnerId(null);
                 vertices.add(vertex);
             }
+            System.out.println("[DEBUG] Generated " + vertices.size() + " vertices");
             
             // Generate edges
             List<Edge> edges = new ArrayList<>();
@@ -214,6 +240,7 @@ public class GameEngine {
                 edge.setOwnerId(null);
                 edges.add(edge);
             }
+            System.out.println("[DEBUG] Generated " + edges.size() + " edges");
             
             // Convert to JSON
             Map<String, Object> boardState = new HashMap<>();
@@ -221,8 +248,11 @@ public class GameEngine {
             boardState.put("vertices", vertices);
             boardState.put("edges", edges);
             
-            return mapper.writeValueAsString(boardState);
+            String jsonBoardState = mapper.writeValueAsString(boardState);
+            System.out.println("[DEBUG] Generated board state JSON: " + jsonBoardState);
+            return jsonBoardState;
         } catch (JsonProcessingException e) {
+            System.err.println("[ERROR] Failed to generate initial board state: " + e.getMessage());
             throw new RuntimeException("Failed to generate initial board state", e);
         }
     }

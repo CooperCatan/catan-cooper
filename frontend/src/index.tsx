@@ -12,6 +12,7 @@ import SignUpPage from "./components/auth/SignUpPage";
 import GameLobby from "./components/game/GameLobby";
 import GameRoom from "./components/game/GameRoom";
 import SettingsPage from "./components/settings/SettingsPage";
+import LeaderboardPage from "./components/leaderboard/LeaderboardPage";
 import AuthProvider from "./components/auth/AuthProvider";
 
 const firebaseConfig = {
@@ -45,6 +46,7 @@ root.render(
           <Route path="/lobby" element={<GameLobby />} />
           <Route path="/game/:gameId" element={<GameRoom />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

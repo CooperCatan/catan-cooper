@@ -23,6 +23,7 @@ interface Vertex {
   y: number;
   settlement?: {
     playerId: number;
+    type: 'settlement' | 'city';
   };
 }
 
@@ -45,6 +46,33 @@ interface GameBoardProps {
   onPlacementComplete: () => void;
   selectedAction: ActionType;
   onActionSelect: (locationId: string | number) => void;
+  boardState: {
+    hexes: {
+      id: number;
+      type: 'desert' | 'wood' | 'brick' | 'ore' | 'wheat' | 'wool';
+      number?: number;
+      hasRobber: boolean;
+      x: number;
+      y: number;
+    }[];
+    vertices: {
+      id: number;
+      x: number;
+      y: number;
+      settlement?: {
+        playerId: number;
+        type: 'settlement' | 'city';
+      };
+    }[];
+    edges: {
+      id: string;
+      v1: number;
+      v2: number;
+      road?: {
+        playerId: number;
+      };
+    }[];
+  };
 }
 
 const TILE_SIZE = 60;
@@ -54,8 +82,13 @@ const ROBBER_SIZE = TILE_SIZE;
 
 // hex bg scaling factors
 const RESOURCE_SCALE = {
-  default: 1.4,
-
+  desert: 1.2,
+  wood: 1.4,
+  brick: 1.4,
+  ore: 1.4,
+  wheat: 1.4,
+  wool: 1.4,
+  default: 1.4
 };
 
 const RESOURCE_IMAGES = {
@@ -68,32 +101,6 @@ const RESOURCE_IMAGES = {
 };
 
 const ROBBER_IMAGE = '/robber.png';
-
-const TILES: HexTile[] = [
-  { id: 1, type: 'ore', number: 10, hasRobber: false, x: 1, y: 0 },
-  { id: 2, type: 'wool', number: 2, hasRobber: false, x: 2, y: 0 },
-  { id: 3, type: 'wood', number: 9, hasRobber: false, x: 3, y: 0 },
-  
-  { id: 4, type: 'wheat', number: 12, hasRobber: false, x: 0.5, y: 1 },
-  { id: 5, type: 'brick', number: 6, hasRobber: false, x: 1.5, y: 1 },
-  { id: 6, type: 'wool', number: 4, hasRobber: false, x: 2.5, y: 1 },
-  { id: 7, type: 'wheat', number: 10, hasRobber: false, x: 3.5, y: 1 },
-  
-  { id: 8, type: 'wood', number: 9, hasRobber: false, x: 0, y: 2 },
-  { id: 9, type: 'desert', hasRobber: true, x: 1, y: 2 },
-  { id: 10, type: 'ore', number: 3, hasRobber: false, x: 2, y: 2 },
-  { id: 11, type: 'wood', number: 8, hasRobber: false, x: 3, y: 2 },
-  { id: 12, type: 'brick', number: 5, hasRobber: false, x: 4, y: 2 },
-  
-  { id: 13, type: 'ore', number: 8, hasRobber: false, x: 0.5, y: 3 },
-  { id: 14, type: 'wheat', number: 5, hasRobber: false, x: 1.5, y: 3 },
-  { id: 15, type: 'brick', number: 11, hasRobber: false, x: 2.5, y: 3 },
-  { id: 16, type: 'wool', number: 3, hasRobber: false, x: 3.5, y: 3 },
-  
-  { id: 17, type: 'wood', number: 4, hasRobber: false, x: 1, y: 4 },
-  { id: 18, type: 'wool', number: 6, hasRobber: false, x: 2, y: 4 },
-  { id: 19, type: 'wheat', number: 11, hasRobber: false, x: 3, y: 4 },
-];
 
 const PORTS: Port[] = [
   { type: 'any', position: 'N', x: 1.5, y: -0.5, rotation: 0 },
@@ -129,7 +136,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
   isCurrentTurn,
   onPlacementComplete,
   selectedAction,
-  onActionSelect
+  onActionSelect,
+  boardState
 }) => {
   const [vertices, setVertices] = useState<Vertex[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -137,51 +145,59 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const [placementMode, setPlacementMode] = useState<'settlement' | 'road' | null>(null);
   const [showValidPlacements, setShowValidPlacements] = useState(true);
 
-  // calculate vertices and edges on mount
+  // calculate vertices and edges on mount and when boardState changes
   useEffect(() => {
-    const calculatedVertices: Vertex[] = [];
-    TILES.forEach(tile => {
-      const centerX = tile.x * HEX_WIDTH + HEX_WIDTH * 2;
-      const centerY = tile.y * HEX_HEIGHT * 0.75 + HEX_HEIGHT;
-      
-      for (let i = 0; i < 6; i++) {
-        const angle = (60 * i - 30) * Math.PI / 180;
-        const x = centerX + TILE_SIZE * Math.cos(angle);
-        const y = centerY + TILE_SIZE * Math.sin(angle);
+    if (boardState.vertices.length > 0) {
+      setVertices(boardState.vertices);
+    } else {
+      const calculatedVertices: Vertex[] = [];
+      boardState.hexes.forEach(tile => {
+        const centerX = tile.x * HEX_WIDTH + HEX_WIDTH * 2;
+        const centerY = tile.y * HEX_HEIGHT * 0.75 + HEX_HEIGHT;
         
-        if (!calculatedVertices.some(v => 
-          Math.abs(v.x - x) < 5 && Math.abs(v.y - y) < 5
-        )) {
-          calculatedVertices.push({
-            id: calculatedVertices.length + 1,
-            x,
-            y
-          });
-        }
-      }
-    });
-    setVertices(calculatedVertices);
-
-    const calculatedEdges: Edge[] = [];
-    calculatedVertices.forEach(v1 => {
-      calculatedVertices.forEach(v2 => {
-        const distance = Math.sqrt(
-          Math.pow(v1.x - v2.x, 2) + Math.pow(v1.y - v2.y, 2)
-        );
-        if (distance > 0 && distance <= TILE_SIZE * 1.2) {
-          const edgeId = `${Math.min(v1.id, v2.id)}-${Math.max(v1.id, v2.id)}`;
-          if (!calculatedEdges.some(e => e.id === edgeId)) {
-            calculatedEdges.push({
-              id: edgeId,
-              v1: v1.id,
-              v2: v2.id
+        for (let i = 0; i < 6; i++) {
+          const angle = (60 * i - 30) * Math.PI / 180;
+          const x = centerX + TILE_SIZE * Math.cos(angle);
+          const y = centerY + TILE_SIZE * Math.sin(angle);
+          
+          if (!calculatedVertices.some(v => 
+            Math.abs(v.x - x) < 5 && Math.abs(v.y - y) < 5
+          )) {
+            calculatedVertices.push({
+              id: calculatedVertices.length + 1,
+              x,
+              y
             });
           }
         }
       });
-    });
-    setEdges(calculatedEdges);
-  }, []);
+      setVertices(calculatedVertices);
+    }
+
+    if (boardState.edges.length > 0) {
+      setEdges(boardState.edges);
+    } else {
+      const calculatedEdges: Edge[] = [];
+      vertices.forEach(v1 => {
+        vertices.forEach(v2 => {
+          const distance = Math.sqrt(
+            Math.pow(v1.x - v2.x, 2) + Math.pow(v1.y - v2.y, 2)
+          );
+          if (distance > 0 && distance <= TILE_SIZE * 1.2) {
+            const edgeId = `${Math.min(v1.id, v2.id)}-${Math.max(v1.id, v2.id)}`;
+            if (!calculatedEdges.some(e => e.id === edgeId)) {
+              calculatedEdges.push({
+                id: edgeId,
+                v1: v1.id,
+                v2: v2.id
+              });
+            }
+          }
+        });
+      });
+      setEdges(calculatedEdges);
+    }
+  }, [boardState]);
 
   const handleVertexClick = async (vertex: Vertex) => {
     if (!isCurrentTurn || vertex.settlement) return;
@@ -205,7 +221,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
         if (response.ok) {
           setVertices(prev => prev.map(v => 
             v.id === vertex.id 
-              ? { ...v, settlement: { playerId: accountId } }
+              ? { ...v, settlement: { playerId: accountId, type: 'settlement' } }
               : v
           ));
           setSelectedVertex(vertex.id);
@@ -428,13 +444,14 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
         {PORTS.map(port => renderPort(port))}
         
-        {TILES.map(tile => (
+        {boardState.hexes.map(tile => (
           <g key={tile.id}>
             <polygon
               points={getHexPoints(tile.x, tile.y)}
               fill={`url(#resource-${tile.type})`}
               stroke="#2c3e50"
               strokeWidth="2"
+              className="transition-all duration-300 hover:brightness-110"
             />
             
             {tile.number && (
@@ -446,6 +463,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                   fill="#fff"
                   stroke="#2c3e50"
                   strokeWidth="2"
+                  className="drop-shadow-md"
                 />
                 <text
                   x={tile.x * HEX_WIDTH + HEX_WIDTH * 2}
@@ -455,6 +473,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                   fill="#2c3e50"
                   fontSize={tile.number === 6 || tile.number === 8 ? "20" : "16"}
                   fontWeight="bold"
+                  className="select-none drop-shadow-sm"
                 >
                   {tile.number}
                 </text>

@@ -30,9 +30,31 @@ interface Player {
 type ActionType = 'SETTLEMENT' | 'CITY' | 'ROAD' | 'TRADE' | 'DEV_CARD' | null;
 
 interface BoardState {
-  hexes: any[];
-  vertices: any[];
-  edges: any[];
+  hexes: {
+    id: number;
+    type: 'desert' | 'wood' | 'brick' | 'ore' | 'wheat' | 'wool';
+    number?: number;
+    hasRobber: boolean;
+    x: number;
+    y: number;
+  }[];
+  vertices: {
+    id: number;
+    x: number;
+    y: number;
+    settlement?: {
+      playerId: number;
+      type: 'settlement' | 'city';
+    };
+  }[];
+  edges: {
+    id: string;
+    v1: number;
+    v2: number;
+    road?: {
+      playerId: number;
+    };
+  }[];
 }
 
 const GameRoom = () => {
@@ -74,6 +96,7 @@ const GameRoom = () => {
   });
 
   useEffect(() => {
+    console.log('[DEBUG] GameRoom mounted with gameId:', gameId);
     const currentUser = auth.currentUser;
     if (!currentUser) {
       navigate('/signin');
@@ -82,60 +105,31 @@ const GameRoom = () => {
 
     // Fetch game data and players
     const fetchGameAndPlayers = async () => {
+      console.log('[DEBUG] Fetching game data for gameId:', gameId);
       try {
-        // Fetch game data
-        const gameResponse = await fetch(`http://localhost:8080/api/games/${gameId}`);
-        if (!gameResponse.ok) {
+        const response = await fetch(`http://localhost:8080/api/games/${gameId}`);
+        console.log('[DEBUG] Game fetch response status:', response.status);
+        
+        if (!response.ok) {
+          console.error('[ERROR] Failed to fetch game:', {
+            status: response.status,
+            statusText: response.statusText,
+            url: response.url
+          });
           throw new Error('Failed to fetch game');
         }
-        const gameData = await gameResponse.json();
-        setGame(gameData);
 
-        // Fetch all accounts to get player details
-        const accountsResponse = await fetch('http://localhost:8080/api/account');
-        if (!accountsResponse.ok) {
-          throw new Error('Failed to fetch accounts');
-        }
-        const accounts = await accountsResponse.json();
-
-        // Map player IDs to full account details
-        const playerDetails = gameData.playerList.map((playerId: number, index: number) => {
-          const account = accounts.find((acc: any) => acc.id === playerId);
-          if (!account) return null;
-
-          return {
-            id: account.id,
-            username: account.username,
-            isCurrentUser: account.email === currentUser.email,
-            devCards: {
-              knight: 0,
-              yearOfPlenty: 0,
-              monopoly: 0,
-              roadBuilding: 0,
-              victoryPoint: 0
-            },
-            color: PLAYER_COLORS[index + 1],
-            ...(account.email === currentUser.email && {
-              resources: {
-                brick: 0,
-                wood: 0,
-                ore: 0,
-                wheat: 0,
-                wool: 0
-              }
-            })
-          };
-        }).filter((player: Player | null): player is Player => player !== null);
-
-        setPlayers(playerDetails);
-
-        // Set current turn to the current user's ID if they're in the game
-        const currentPlayer = playerDetails.find((p: Player) => p.isCurrentUser);
-        if (currentPlayer) {
-          setCurrentTurn(currentPlayer.id);
+        const data = await response.json();
+        console.log('[DEBUG] Received game data:', data);
+        
+        setGame(data);
+        if (data.players) {
+          console.log('[DEBUG] Setting players:', data.players);
+          setPlayers(data.players);
         }
       } catch (error) {
-        console.error('Error fetching game data:', error);
+        console.error('[ERROR] Error fetching game data:', error);
+        throw error;
       }
     };
 
@@ -156,6 +150,67 @@ const GameRoom = () => {
       clearInterval(timer);
     };
   }, [auth, navigate, gameId]);
+
+  useEffect(() => {
+    console.log('[DEBUG] Setting up game state polling');
+    if (gameId && game?.inProgress) {
+      const interval = setInterval(() => {
+        console.log('[DEBUG] Polling game state');
+        fetchGameState().catch(error => {
+          console.error('[ERROR] Game state polling failed:', error);
+        });
+      }, 5000);
+
+      return () => {
+        console.log('[DEBUG] Cleaning up game state polling');
+        clearInterval(interval);
+      };
+    }
+  }, [gameId, game?.inProgress]);
+
+  const fetchGameState = async () => {
+    console.log('[DEBUG] Fetching game state for gameId:', gameId);
+    try {
+      const response = await fetch(`http://localhost:8080/api/games/${gameId}`);
+      console.log('[DEBUG] Game state fetch response status:', response.status);
+      
+      if (!response.ok) {
+        console.error('[ERROR] Failed to fetch game state:', {
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url
+        });
+        throw new Error('Failed to fetch game state');
+      }
+
+      const data = await response.json();
+      console.log('[DEBUG] Received game state:', data);
+      
+      // Update game state
+      setGame(data);
+      
+      // Update board state if available
+      if (data.boardState) {
+        console.log('[DEBUG] Setting board state:', data.boardState);
+        setBoardState({
+          hexes: data.boardState.hexes || [],
+          vertices: data.boardState.vertices || [],
+          edges: data.boardState.edges || []
+        });
+      } else {
+        console.warn('[WARN] No board state in response:', data);
+      }
+
+      // Update current turn
+      if (data.currentTurn) {
+        console.log('[DEBUG] Setting current turn:', data.currentTurn);
+        setCurrentTurn(data.currentTurn);
+      }
+    } catch (error) {
+      console.error('[ERROR] Error fetching game state:', error);
+      throw error;
+    }
+  };
 
   const handleTurnComplete = () => {
     if (!game || currentTurn === null) return;
@@ -794,6 +849,7 @@ const GameRoom = () => {
               onPlacementComplete={handleTurnComplete}
               selectedAction={selectedAction}
               onActionSelect={handleGameAction}
+              boardState={boardState}
             />
           </div>
         </div>

@@ -3,6 +3,8 @@ package catan;
 import catan.util.DataAccessObject;
 
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class AccountDAO extends DataAccessObject<Account> {
 
@@ -15,6 +17,7 @@ public class AccountDAO extends DataAccessObject<Account> {
     private static final String FIND_BY_EMAIL = "SELECT * FROM account WHERE email = ?";
     private static final String UPDATE_USERNAME = "UPDATE account SET username = ? WHERE email = ?";
     private static final String DELETE_BY_EMAIL = "DELETE FROM account WHERE email = ?";
+    private static final String FIND_ALL = "SELECT * FROM account ORDER BY elo DESC";
 
     public AccountDAO(Connection connection) {
         super(connection);
@@ -132,6 +135,20 @@ public class AccountDAO extends DataAccessObject<Account> {
             e.printStackTrace();
             throw new RuntimeException(e);
         }
+    }
+
+    public List<Account> findAll() {
+        List<Account> accounts = new ArrayList<>();
+        try (Statement stmt = this.connection.createStatement()) {
+            ResultSet rs = stmt.executeQuery(FIND_ALL);
+            while (rs.next()) {
+                accounts.add(extractFromResultSet(rs));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+        return accounts;
     }
 
     private Account extractFromResultSet(ResultSet rs) throws SQLException {
