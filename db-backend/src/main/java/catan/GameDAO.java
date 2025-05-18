@@ -11,8 +11,15 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import java.util.Map;
+import java.util.HashMap;
 
 public class GameDAO extends DataAccessObject<Game> {
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final String GET_ONE = "SELECT * FROM game WHERE game_id=?";
     private static final String GET_ALL = "SELECT * FROM game";
@@ -22,8 +29,9 @@ public class GameDAO extends DataAccessObject<Game> {
     private static final String INSERT = "INSERT INTO game (player_list, winner_id, is_game_over, in_progress, game_name, " +
         "json_hexes, json_vertices, json_edges, json_players, current_dice_roll, robber_location, " +
         "bank_brick, bank_ore, bank_sheep, bank_wheat, bank_wood, " +
-        "bank_year_of_plenty, bank_monopoly, bank_road_building, bank_victory_point, bank_knight) " +
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING game_id";
+        "bank_year_of_plenty, bank_monopoly, bank_road_building, bank_victory_point, bank_knight, " +
+        "current_turn_player_id, setup_phase_complete, current_setup_placement_index, setup_placement_order, settlements_placed_in_setup_count, roads_placed_in_setup_count) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING game_id";
     private static final String DELETE = "DELETE FROM game WHERE game_id=?";
     private static final String ADD_PLAYER = "UPDATE game SET player_list = array_append(player_list, ?) WHERE game_id=?";
     private static final String REMOVE_PLAYER = "UPDATE game SET player_list = array_remove(player_list, ?) WHERE game_id=?";
@@ -33,6 +41,12 @@ public class GameDAO extends DataAccessObject<Game> {
         "bank_brick=?, bank_ore=?, bank_sheep=?, bank_wheat=?, bank_wood=?, " +
         "bank_year_of_plenty=?, bank_monopoly=?, bank_road_building=?, bank_victory_point=?, bank_knight=?, " +
         "in_progress=?, is_game_over=?, winner_id=? " +
+        "WHERE game_id=?";
+    private static final String UPDATE_GAME_SETUP_STATE = "UPDATE game SET " +
+        "json_hexes=?, json_vertices=?, json_edges=?, json_players=?, " +
+        "in_progress=?, current_turn_player_id=?, robber_location=?, " +
+        "setup_phase_complete=?, current_setup_placement_index=?, " +
+        "setup_placement_order=?, settlements_placed_in_setup_count=?, roads_placed_in_setup_count=? " +
         "WHERE game_id=?";
 
     public GameDAO(Connection connection) {
@@ -127,6 +141,21 @@ public class GameDAO extends DataAccessObject<Game> {
             setNullableInt(statement, 19, game.getBankRoadBuilding());
             setNullableInt(statement, 20, game.getBankVictoryPoint());
             setNullableInt(statement, 21, game.getBankKnight());
+
+            setNullableLong(statement, 22, game.getCurrentTurnPlayerId());
+            statement.setBoolean(23, game.isSetupPhaseComplete());
+            statement.setInt(24, game.getCurrentSetupPlacementIndex());
+            try {
+                statement.setString(25, game.getSetupPlacementOrder() != null ? objectMapper.writeValueAsString(game.getSetupPlacementOrder()) : "[]");
+                statement.setString(26, game.getSettlementsPlacedInSetupCount() != null ? objectMapper.writeValueAsString(game.getSettlementsPlacedInSetupCount()) : "{}");
+                statement.setString(27, game.getRoadsPlacedInSetupCount() != null ? objectMapper.writeValueAsString(game.getRoadsPlacedInSetupCount()) : "{}");
+            } catch (JsonProcessingException e) {
+                System.out.println("[ERROR] JSON processing error in create (setup fields): " + e.getMessage());
+                e.printStackTrace();
+                statement.setString(25, "[]");
+                statement.setString(26, "{}");
+                statement.setString(27, "{}");
+            }
             
             ResultSet rs = statement.executeQuery();
             if (rs.next()) {
@@ -180,39 +209,6 @@ public class GameDAO extends DataAccessObject<Game> {
             statement.setLong(2, gameId);
             if (statement.executeUpdate() > 0) {
                 return findById(gameId);
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            throw new RuntimeException(e);
-        }
-        return null;
-    }
-
-    public Game updateGameState(Game game) {
-        try (PreparedStatement statement = this.connection.prepareStatement(UPDATE_GAME_STATE)) {
-            statement.setString(1, game.getJsonHexes());
-            statement.setString(2, game.getJsonVertices());
-            statement.setString(3, game.getJsonEdges());
-            statement.setString(4, game.getJsonPlayers());
-            setNullableInt(statement, 5, game.getCurrentDiceRoll());
-            setNullableInt(statement, 6, game.getRobberLocation());
-            setNullableInt(statement, 7, game.getBankBrick());
-            setNullableInt(statement, 8, game.getBankOre());
-            setNullableInt(statement, 9, game.getBankSheep());
-            setNullableInt(statement, 10, game.getBankWheat());
-            setNullableInt(statement, 11, game.getBankWood());
-            setNullableInt(statement, 12, game.getBankYearOfPlenty());
-            setNullableInt(statement, 13, game.getBankMonopoly());
-            setNullableInt(statement, 14, game.getBankRoadBuilding());
-            setNullableInt(statement, 15, game.getBankVictoryPoint());
-            setNullableInt(statement, 16, game.getBankKnight());
-            statement.setBoolean(17, game.isInProgress());
-            statement.setBoolean(18, game.isGameOver());
-            setNullableLong(statement, 19, game.getWinnerId());
-            statement.setLong(20, game.getId());
-            
-            if (statement.executeUpdate() > 0) {
-                return findById(game.getId());
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -277,6 +273,57 @@ public class GameDAO extends DataAccessObject<Game> {
         game.setBankKnight(rs.getInt("bank_knight"));
         if (rs.wasNull()) game.setBankKnight(null);
         
+        System.out.println("[DEBUG_EXTRACT] Extracting game ID: " + game.getId());
+
+        try {
+            Long cTurnPlayerId = (Long) rs.getObject("current_turn_player_id");
+            game.setCurrentTurnPlayerId(cTurnPlayerId);
+            System.out.println("[DEBUG_EXTRACT] game ID " + game.getId() + " - current_turn_player_id: " + cTurnPlayerId);
+
+            boolean spComplete = rs.getBoolean("setup_phase_complete");
+            game.setSetupPhaseComplete(spComplete);
+            System.out.println("[DEBUG_EXTRACT] game ID " + game.getId() + " - setup_phase_complete: " + spComplete);
+
+            int csPlacementIndex = rs.getInt("current_setup_placement_index");
+            game.setCurrentSetupPlacementIndex(csPlacementIndex);
+            System.out.println("[DEBUG_EXTRACT] game ID " + game.getId() + " - current_setup_placement_index: " + csPlacementIndex);
+
+            String setupOrderJson = rs.getString("setup_placement_order");
+            System.out.println("[DEBUG_EXTRACT] game ID " + game.getId() + " - setup_placement_order (JSON string): " + setupOrderJson);
+            if (setupOrderJson != null && !setupOrderJson.isEmpty() && !"null".equalsIgnoreCase(setupOrderJson.trim())) {
+                game.setSetupPlacementOrder(objectMapper.readValue(setupOrderJson, new TypeReference<List<Long>>(){}));
+            } else {
+                game.setSetupPlacementOrder(new ArrayList<>());
+                 System.out.println("[DEBUG_EXTRACT] game ID " + game.getId() + " - setup_placement_order parsed as empty list due to null/empty/\'null\' string.");
+            }
+
+            String settlementsCountJson = rs.getString("settlements_placed_in_setup_count");
+            System.out.println("[DEBUG_EXTRACT] game ID " + game.getId() + " - settlements_placed_in_setup_count (JSON string): " + settlementsCountJson);
+            if (settlementsCountJson != null && !settlementsCountJson.isEmpty() && !"null".equalsIgnoreCase(settlementsCountJson.trim())) {
+                game.setSettlementsPlacedInSetupCount(objectMapper.readValue(settlementsCountJson, new TypeReference<Map<Long, Integer>>(){}));
+            } else {
+                game.setSettlementsPlacedInSetupCount(new HashMap<>());
+                System.out.println("[DEBUG_EXTRACT] game ID " + game.getId() + " - settlements_placed_in_setup_count parsed as empty map due to null/empty/\'null\' string.");
+            }
+
+            String roadsCountJson = rs.getString("roads_placed_in_setup_count");
+            System.out.println("[DEBUG_EXTRACT] game ID " + game.getId() + " - roads_placed_in_setup_count (JSON string): " + roadsCountJson);
+            if (roadsCountJson != null && !roadsCountJson.isEmpty() && !"null".equalsIgnoreCase(roadsCountJson.trim())) {
+                game.setRoadsPlacedInSetupCount(objectMapper.readValue(roadsCountJson, new TypeReference<Map<Long, Integer>>(){}));
+            } else {
+                game.setRoadsPlacedInSetupCount(new HashMap<>());
+                System.out.println("[DEBUG_EXTRACT] game ID " + game.getId() + " - roads_placed_in_setup_count parsed as empty map due to null/empty/\'null\' string.");
+            }
+             System.out.println("[DEBUG_EXTRACT] game ID " + game.getId() + " - Successfully processed all setup fields.");
+
+        } catch (JsonProcessingException e) {
+            System.err.println("[ERROR_EXTRACT] JSON parsing error for game ID " + game.getId() + ": " + e.getMessage());
+            e.printStackTrace(); 
+            game.setSetupPlacementOrder(new ArrayList<>());
+            game.setSettlementsPlacedInSetupCount(new HashMap<>());
+            game.setRoadsPlacedInSetupCount(new HashMap<>());
+        } 
+        System.out.println("[DEBUG_EXTRACT] Successfully extracted all fields for game ID: " + game.getId());
         return game;
     }
 
@@ -293,6 +340,67 @@ public class GameDAO extends DataAccessObject<Game> {
             statement.setLong(index, value);
         } else {
             statement.setNull(index, java.sql.Types.BIGINT);
+        }
+    }
+
+    public void updateGameState(Game game) throws SQLException {
+        String sql = "UPDATE games SET " +
+                "json_hexes = ?, json_vertices = ?, json_edges = ?, json_players = ?, " +
+                "current_dice_roll = ?, robber_location = ?, " +
+                "bank_brick = ?, bank_ore = ?, bank_sheep = ?, bank_wheat = ?, bank_wood = ?, " +
+                "bank_year_of_plenty = ?, bank_monopoly = ?, bank_road_building = ?, " +
+                "bank_victory_point = ?, bank_knight = ?, winner_id = ?, is_game_over = ?, " +
+                "in_progress = ?, current_turn_player_id = ? " +
+                "WHERE game_id = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setString(1, game.getJsonHexes());
+            pstmt.setString(2, game.getJsonVertices());
+            pstmt.setString(3, game.getJsonEdges());
+            pstmt.setString(4, game.getJsonPlayers());
+            pstmt.setObject(5, game.getCurrentDiceRoll()); 
+            pstmt.setObject(6, game.getRobberLocation()); 
+            pstmt.setInt(7, game.getBankBrick());
+            pstmt.setInt(8, game.getBankOre());
+            pstmt.setInt(9, game.getBankSheep());
+            pstmt.setInt(10, game.getBankWheat());
+            pstmt.setInt(11, game.getBankWood());
+            pstmt.setInt(12, game.getBankYearOfPlenty());
+            pstmt.setInt(13, game.getBankMonopoly());
+            pstmt.setInt(14, game.getBankRoadBuilding());
+            pstmt.setInt(15, game.getBankVictoryPoint());
+            pstmt.setInt(16, game.getBankKnight());
+            pstmt.setObject(17, game.getWinnerId()); 
+            pstmt.setBoolean(18, game.isGameOver());
+            pstmt.setBoolean(19, game.isInProgress());
+            pstmt.setObject(20, game.getCurrentTurnPlayerId());
+            pstmt.setLong(21, game.getId());
+            pstmt.executeUpdate();
+        }
+    }
+
+    public void updateGameSetupState(Game game) throws SQLException {
+        try (PreparedStatement pstmt = connection.prepareStatement(UPDATE_GAME_SETUP_STATE)) {
+            pstmt.setString(1, game.getJsonHexes());
+            pstmt.setString(2, game.getJsonVertices());
+            pstmt.setString(3, game.getJsonEdges());
+            pstmt.setString(4, game.getJsonPlayers());
+            pstmt.setBoolean(5, game.isInProgress());
+            setNullableLong(pstmt, 6, game.getCurrentTurnPlayerId()); 
+            setNullableInt(pstmt, 7, game.getRobberLocation());
+            pstmt.setBoolean(8, game.isSetupPhaseComplete());
+            pstmt.setInt(9, game.getCurrentSetupPlacementIndex());
+            
+            try {
+                pstmt.setString(10, objectMapper.writeValueAsString(game.getSetupPlacementOrder()));
+                pstmt.setString(11, objectMapper.writeValueAsString(game.getSettlementsPlacedInSetupCount()));
+                pstmt.setString(12, objectMapper.writeValueAsString(game.getRoadsPlacedInSetupCount()));
+            } catch (JsonProcessingException e) {
+                // handle or rethrow as a SQLException or a RuntimeException
+                throw new SQLException("Error serializing setup data to JSON", e);
+            }
+            
+            pstmt.setLong(13, game.getId());
+            pstmt.executeUpdate();
         }
     }
 }

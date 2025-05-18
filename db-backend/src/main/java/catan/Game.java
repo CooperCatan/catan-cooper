@@ -4,6 +4,8 @@ import catan.util.DataTransferObject;
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 
 public class Game implements DataTransferObject {
     private long gameId;
@@ -31,6 +33,15 @@ public class Game implements DataTransferObject {
     private Integer bankKnight;
     private transient List<Account> players;
 
+    // setup phase management
+    private List<Long> setupPlacementOrder;
+    private int currentSetupPlacementIndex;
+    private Map<Long, Integer> settlementsPlacedInSetupCount;
+    private Map<Long, Integer> roadsPlacedInSetupCount;
+    private boolean setupPhaseComplete;
+
+    private Long currentTurnPlayerId;
+
     public Game() {
         this.playerList = new ArrayList<>();
         this.players = new ArrayList<>();
@@ -38,15 +49,15 @@ public class Game implements DataTransferObject {
         this.inProgress = false;
         this.gameName = "Untitled Game";
         
-        // Initialize game state with empty/default values
+        // initialize game state with empty/default values
         this.jsonHexes = "[]";
         this.jsonVertices = "[]";
         this.jsonEdges = "[]";
         this.jsonPlayers = "[]";
         this.currentDiceRoll = null;
         this.robberLocation = null;
-        this.bankBrick = 19;    // Standard Catan starting values
-        this.bankOre = 19;
+        this.bankBrick = 19;    // standard Catan starting values from rulebook
+        this.bankOre = 19; 
         this.bankSheep = 19;
         this.bankWheat = 19;
         this.bankWood = 19;
@@ -55,6 +66,51 @@ public class Game implements DataTransferObject {
         this.bankRoadBuilding = 2;
         this.bankVictoryPoint = 5;
         this.bankKnight = 14;
+
+        // setup phase
+        this.setupPlacementOrder = new ArrayList<>();
+        this.currentSetupPlacementIndex = 0;
+        this.settlementsPlacedInSetupCount = new HashMap<>();
+        this.roadsPlacedInSetupCount = new HashMap<>();
+        this.setupPhaseComplete = false;
+        
+    }
+
+    // copy constructor
+    public Game(Game other) {
+        this.gameId = other.gameId;
+        this.playerList = other.playerList != null ? new ArrayList<>(other.playerList) : new ArrayList<>();
+        this.winnerId = other.winnerId;
+        this.isGameOver = other.isGameOver;
+        this.inProgress = other.inProgress;
+        this.createdAt = other.createdAt != null ? new Timestamp(other.createdAt.getTime()) : null;
+        this.gameName = other.gameName;
+        this.jsonHexes = other.jsonHexes;
+        this.jsonVertices = other.jsonVertices;
+        this.jsonEdges = other.jsonEdges;
+        this.jsonPlayers = other.jsonPlayers;
+        this.currentDiceRoll = other.currentDiceRoll;
+        this.robberLocation = other.robberLocation;
+        this.bankBrick = other.bankBrick;
+        this.bankOre = other.bankOre;
+        this.bankSheep = other.bankSheep;
+        this.bankWheat = other.bankWheat;
+        this.bankWood = other.bankWood;
+        this.bankYearOfPlenty = other.bankYearOfPlenty;
+        this.bankMonopoly = other.bankMonopoly;
+        this.bankRoadBuilding = other.bankRoadBuilding;
+        this.bankVictoryPoint = other.bankVictoryPoint;
+        this.bankKnight = other.bankKnight;
+
+        this.players = other.players != null ? new ArrayList<>(other.players) : new ArrayList<>(); // shallow copy of the list, Account objects are references
+
+        // setup phase management
+        this.setupPlacementOrder = other.setupPlacementOrder != null ? new ArrayList<>(other.setupPlacementOrder) : new ArrayList<>();
+        this.currentSetupPlacementIndex = other.currentSetupPlacementIndex;
+        this.settlementsPlacedInSetupCount = other.settlementsPlacedInSetupCount != null ? new HashMap<>(other.settlementsPlacedInSetupCount) : new HashMap<>();
+        this.roadsPlacedInSetupCount = other.roadsPlacedInSetupCount != null ? new HashMap<>(other.roadsPlacedInSetupCount) : new HashMap<>();
+        this.setupPhaseComplete = other.setupPhaseComplete;
+        this.currentTurnPlayerId = other.currentTurnPlayerId;
     }
 
     @Override
@@ -168,6 +224,29 @@ public class Game implements DataTransferObject {
 
     public void setPlayers(List<Account> players) {
         this.players = players;
+    }
+
+    public List<Long> getSetupPlacementOrder() { return setupPlacementOrder; }
+    public void setSetupPlacementOrder(List<Long> setupPlacementOrder) { this.setupPlacementOrder = setupPlacementOrder; }
+
+    public int getCurrentSetupPlacementIndex() { return currentSetupPlacementIndex; }
+    public void setCurrentSetupPlacementIndex(int currentSetupPlacementIndex) { this.currentSetupPlacementIndex = currentSetupPlacementIndex; }
+
+    public Map<Long, Integer> getSettlementsPlacedInSetupCount() { return settlementsPlacedInSetupCount; }
+    public void setSettlementsPlacedInSetupCount(Map<Long, Integer> settlementsPlacedInSetupCount) { this.settlementsPlacedInSetupCount = settlementsPlacedInSetupCount; }
+
+    public Map<Long, Integer> getRoadsPlacedInSetupCount() { return roadsPlacedInSetupCount; }
+    public void setRoadsPlacedInSetupCount(Map<Long, Integer> roadsPlacedInSetupCount) { this.roadsPlacedInSetupCount = roadsPlacedInSetupCount; }
+
+    public boolean isSetupPhaseComplete() { return setupPhaseComplete; }
+    public void setSetupPhaseComplete(boolean setupPhaseComplete) { this.setupPhaseComplete = setupPhaseComplete; }
+
+    public Long getCurrentTurnPlayerId() {
+        return this.currentTurnPlayerId;
+    }
+
+    public void setCurrentTurnPlayerId(Long currentTurnPlayerId) {
+        this.currentTurnPlayerId = currentTurnPlayerId;
     }
 
     @Override

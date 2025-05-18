@@ -22,6 +22,8 @@ import org.slf4j.Logger; // logging
 import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections; 
+import java.util.stream.Collectors; // caching
 
 @SpringBootApplication
 @RestController
@@ -30,6 +32,11 @@ public class CatanApplication {
     private final DatabaseConnectionManager dcm;
     private final FirebaseAuthService firebaseAuthService;
     private final Map<String, Bucket> createGameLimiter = new ConcurrentHashMap<>();
+
+    // cache for getAllGames endpoint
+    // private List<Game> allGamesCache = null;
+    // private long lastAllGamesCacheUpdateTime = 0;
+    // private static final long ALL_GAMES_CACHE_DURATION_MS = 5000; // cache for 5 seconds
 
     @Autowired
     public CatanApplication(FirebaseAuthService firebaseAuthService) {
@@ -41,10 +48,10 @@ public class CatanApplication {
         SpringApplication.run(CatanApplication.class, args);
     }
 
-    // rate limiter configuration - 3 requests per minute, can modify here to be less
+    // rate limiter configuration - 2 requests per minute, can modify here to be less
     private Bucket createBucket() {
         return Bucket4j.builder()
-            .addLimit(Bandwidth.simple(3, Duration.ofMinutes(1)))
+            .addLimit(Bandwidth.simple(2, Duration.ofMinutes(1)))
             .build();
     }
 
@@ -116,7 +123,7 @@ public class CatanApplication {
         @JsonProperty("v2") // for road (vertex 2 of the edge)
         private Integer v2;
 
-        @JsonProperty("isSecondRoundPlacement") // To determine if resources should be granted for settlement during setup phase
+        @JsonProperty("isSecondRoundPlacement") // to determine if resources should be granted for settlement during setup phase
         private boolean isSecondRoundPlacement;
 
         // getters and setters
@@ -145,6 +152,7 @@ public class CatanApplication {
     // real-time validation endpoints for username checking on sign on
     @PostMapping("/api/account/check-username")
     public ResponseEntity<?> checkUsername(@RequestBody CheckUsernameRequest request) {
+        logger.info("[API_CALL] POST /api/account/check-username");
         try (Connection conn = dcm.getConnection()) {
             AccountDAO accountDAO = new AccountDAO(conn);
             boolean exists = accountDAO.checkUsernameExists(request.getUsername());
@@ -162,6 +170,7 @@ public class CatanApplication {
     // real-time validation endpoints for email checking on sign on
     @PostMapping("/api/account/check-email")
     public ResponseEntity<?> checkEmail(@RequestBody CheckEmailRequest request) {
+        logger.info("[API_CALL] POST /api/account/check-email");
         try (Connection conn = dcm.getConnection()) {
             AccountDAO accountDAO = new AccountDAO(conn);
             System.out.println("Checking email: " + request.getEmail());
@@ -183,6 +192,7 @@ public class CatanApplication {
     public ResponseEntity<?> createAccount(
             @RequestBody CreateAccountRequest request,
             @RequestHeader("Authorization") String idToken) {
+        logger.info("[API_CALL] POST /api/account");
         try {
             // verify firebase token
             String email = firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
@@ -235,6 +245,7 @@ public class CatanApplication {
     public ResponseEntity<?> getAccountByEmail(
             @RequestBody CheckEmailRequest request,
             @RequestHeader("Authorization") String idToken) {
+        logger.info("[API_CALL] POST /api/account/by-email");
         try {
             // verify firebase token
             String email = firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
@@ -266,6 +277,7 @@ public class CatanApplication {
     public ResponseEntity<?> updateUsername(
             @RequestBody UpdateUsernameRequest request,
             @RequestHeader("Authorization") String idToken) {
+        logger.info("[API_CALL] PATCH /api/account/username");
         try {
             // verify firebase token
             String email = firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
@@ -301,6 +313,7 @@ public class CatanApplication {
     // delete account endpoint
     @DeleteMapping("/api/account")
     public ResponseEntity<?> deleteAccount(@RequestHeader("Authorization") String idToken) {
+        logger.info("[API_CALL] DELETE /api/account");
         try {
             // verify Firebase token
             String email = firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
@@ -330,6 +343,7 @@ public class CatanApplication {
     // get all games endpoint for displaying on GameLobby page
     @GetMapping("/api/games")
     public ResponseEntity<?> getAllGames() {
+        logger.info("[API_CALL] GET /api/games");
         try (Connection conn = dcm.getConnection()) {
             GameDAO gameDAO = new GameDAO(conn);
             AccountDAO accountDAO = new AccountDAO(conn);
@@ -337,16 +351,19 @@ public class CatanApplication {
             // delete empty games in progress 
             gameDAO.deleteEmptyGames();
             
-            // get all games
+            // Directly fetch all games from the DAO
             List<Game> games = gameDAO.findAll();
+            logger.info("[GET_ALL_GAMES] Fetched {} games from DB.", games.size());
             
-            // enhance games with player information for display on UI
+            // Enhance games with player information for display on UI
             for (Game game : games) {
                 List<Account> players = new ArrayList<>();
-                for (Long playerId : game.getPlayerList()) {
-                    Account player = accountDAO.findById(playerId);
-                    if (player != null) {
-                        players.add(player);
+                if (game.getPlayerList() != null) {
+                    for (Long playerId : game.getPlayerList()) {
+                        Account player = accountDAO.findById(playerId);
+                        if (player != null) {
+                            players.add(player);
+                        }
                     }
                 }
                 game.setPlayers(players);
@@ -364,6 +381,7 @@ public class CatanApplication {
     public ResponseEntity<?> createGame(
             @RequestBody CreateGameRequest request,
             @RequestHeader("Authorization") String idToken) {
+        logger.info("[API_CALL] POST /api/games");
         try {
             System.out.println("[DEBUG] Starting game creation process");
             // verify Firebase token
@@ -448,6 +466,7 @@ public class CatanApplication {
     public ResponseEntity<?> joinGame(
             @PathVariable long gameId,
             @RequestHeader("Authorization") String idToken) {
+        logger.info("[API_CALL] POST /api/games/{}/players", gameId);
         try {
             // verify Firebase token
             String email = firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
@@ -508,6 +527,7 @@ public class CatanApplication {
     public ResponseEntity<?> leaveGame(
             @PathVariable long gameId,
             @RequestHeader("Authorization") String idToken) {
+        logger.info("[API_CALL] DELETE /api/games/{}/players", gameId);
         try {
             // verify Firebase token
             String email = firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
@@ -549,6 +569,7 @@ public class CatanApplication {
     // get username endpoint
     @GetMapping("/api/account/username")
     public ResponseEntity<?> getUsername(@RequestHeader("Authorization") String idToken) {
+        logger.info("[API_CALL] GET /api/account/username");
         try {
             // verify Firebase token
             String email = firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
@@ -575,6 +596,7 @@ public class CatanApplication {
     // get all accounts endpoint for leaderboard display
     @GetMapping("/api/accounts")
     public ResponseEntity<?> getAllAccounts(@RequestHeader("Authorization") String idToken) {
+        logger.info("[API_CALL] GET /api/accounts");
         try {
             // verify Firebase token
             firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
@@ -592,11 +614,12 @@ public class CatanApplication {
             return ResponseEntity.internalServerError().body("Database error");
         }
     }
-
+    // start game endpoint
     @PostMapping("/api/games/{gameId}/start")
     public ResponseEntity<?> startGame(
             @PathVariable long gameId,
             @RequestHeader("Authorization") String idToken) {
+        logger.info("[API_CALL] POST /api/games/{}/start", gameId);
         logger.info("[START_GAME] Received request to start game ID: {}", gameId);
         try {
             String email = firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
@@ -630,7 +653,6 @@ public class CatanApplication {
                     return ResponseEntity.badRequest().body("Game has no players");
                 }
 
-                // check if the current user is the host (first player in the list)
                 if (!game.getPlayerList().get(0).equals(account.getId())) {
                     logger.warn("[START_GAME] User {} is not the host of game ID: {}. Host is: {}", account.getId(), gameId, game.getPlayerList().get(0));
                     return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only the host can start the game");
@@ -638,20 +660,59 @@ public class CatanApplication {
                 logger.info("[START_GAME] User {} is confirmed as host for game ID: {}", account.getId(), gameId);
 
                 logger.info("[START_GAME] Initializing GameEngine for game ID: {}", gameId);
-                GameEngine engine = new GameEngine(gameId);
+                GameEngine engine = new GameEngine(gameId); // gameEngine constructor loads/generates board
                 logger.info("[START_GAME] GameEngine initialized for game ID: {}", gameId);
                 
-                // update game state with generated board
-                logger.info("[START_GAME] Updating game DTO with new board state from GameEngine for game ID: {}", gameId);
                 game.setJsonHexes(engine.getJsonHexes());
                 game.setJsonVertices(engine.getJsonVertices());
                 game.setJsonEdges(engine.getJsonEdges());
                 game.setJsonPlayers(engine.getJsonPlayers()); 
                 game.setInProgress(true);
                 game.setRobberLocation(engine.getRobberLocation()); 
+                game.setSetupPhaseComplete(false); // init game as currently in setup phase
+
+                game.setSettlementsPlacedInSetupCount(new HashMap<>());
+                game.setRoadsPlacedInSetupCount(new HashMap<>());
+
+                List<Long> playerIds = game.getPlayerList();
+                List<Long> setupOrder = new ArrayList<>();
+
+                // Round 1: P1, P2, ..., PN place their first settlement
+                // Round 2: P1, P2, ..., PN place their first road
+                // Round 3: PN, ..., P2, P1 place their second settlement (collect resources)
+                // Round 4: PN, ..., P2, P1 place their second road
+
+                // For a single player (P1): S1, R1, S2 (resources), R2
+                // For two players (P1, P2): P1(S1), P2(S1), P1(R1), P2(R1), P2(S2), P1(S2), P2(R2), P1(R2)
+
+                // Add players for first settlement pass (forward)
+                setupOrder.addAll(playerIds);
+                // Add players for first road pass (forward)
+                setupOrder.addAll(playerIds);
+
+                // Prepare for reverse order passes
+                List<Long> reversePlayerIds = new ArrayList<>(playerIds);
+                Collections.reverse(reversePlayerIds);
+
+                // Add players for second settlement pass (reverse) - these get resources
+                setupOrder.addAll(reversePlayerIds);
+                // Add players for second road pass (reverse)
+                setupOrder.addAll(reversePlayerIds);
+                
+                game.setSetupPlacementOrder(setupOrder);
+                game.setCurrentSetupPlacementIndex(0);
+
+                if (!setupOrder.isEmpty()) {
+                    game.setCurrentTurnPlayerId(setupOrder.get(0));
+                    logger.info("[START_GAME] Setup order generated. First turn in setup: PlayerID {}", setupOrder.get(0));
+                } else {
+                    logger.warn("[START_GAME] Setup order is empty, cannot set initial turn player for setup.");
+                    // this case should ideally not happen if there are players in the game.
+                }
+                // setup phase over
 
                 logger.info("[START_GAME] Persisting updated game state to DB for game ID: {}", gameId);
-                gameDAO.updateGameState(game);
+                gameDAO.updateGameSetupState(game); 
                 logger.info("[START_GAME] Game state persisted for game ID: {}", gameId);
                 
                 Game updatedGame = gameDAO.findById(gameId);
@@ -672,7 +733,6 @@ public class CatanApplication {
                 Map<String, Object> response = new HashMap<>();
                 response.put("game", updatedGame); // send the updated game DTO
                 
-                // --- DEBUG LOG: Check edges being sent in response ---
                 List<Edge> edgesToSend = engine.getEdges();
                 if (edgesToSend != null && !edgesToSend.isEmpty()) {
                     logger.debug("[START_GAME_DEBUG] Edges being prepared for response. Count: {}. First few:", edgesToSend.size());
@@ -682,7 +742,6 @@ public class CatanApplication {
                                       edge.getId(), 
                                       (edge.getConnectedVertices() != null ? edge.getConnectedVertices().toString() : "null"));
                     }
-                    // Log the JSON string that will actually be sent
                     try {
                         String edgesJsonString = new ObjectMapper().writeValueAsString(edgesToSend);
                         logger.debug("[START_GAME_DEBUG] JSON string for edges in response (truncated): {}", 
@@ -693,9 +752,7 @@ public class CatanApplication {
                 } else {
                     logger.warn("[START_GAME_DEBUG] edges list from GameEngine is null or empty before sending response.");
                 }
-                // --- END DEBUG LOG ---
 
-                // +++ DEBUG LOG: Check vertices being sent in response +++
                 List<Vertex> verticesToSend = engine.getVertices();
                 if (verticesToSend != null && !verticesToSend.isEmpty()) {
                     logger.debug("[START_GAME_DEBUG] Vertices being prepared for response. Count: {}. First few:", verticesToSend.size());
@@ -704,13 +761,11 @@ public class CatanApplication {
                          logger.debug("[START_GAME_DEBUG]   - Vertex ID: {}, Owner: {}, Type: {}", 
                                       vertex.getId(), vertex.getOwnerId(), vertex.getBuildingType());
                     }
-                    // Log the last vertex as well, if possible, to check for ID 54
                     if(verticesToSend.size() > 0) {
                         Vertex lastVertex = verticesToSend.get(verticesToSend.size() - 1);
                          logger.debug("[START_GAME_DEBUG]   - Last Vertex ID: {}, Owner: {}, Type: {}", 
                                       lastVertex.getId(), lastVertex.getOwnerId(), lastVertex.getBuildingType());
                     }
-                    // Log the JSON string that will actually be sent
                     try {
                         String verticesJsonString = new ObjectMapper().writeValueAsString(verticesToSend);
                         logger.debug("[START_GAME_DEBUG] JSON string for vertices in response (truncated): {}", 
@@ -721,11 +776,10 @@ public class CatanApplication {
                 } else {
                     logger.warn("[START_GAME_DEBUG] vertices list from GameEngine is null or empty before sending response.");
                 }
-                // +++ END DEBUG LOG +++
 
                 response.put("boardState", Map.of(
                         "hexes", engine.getHexes(),
-                        "vertices", verticesToSend, // use the variable we just logged
+                        "vertices", verticesToSend, 
                         "edges", edgesToSend, 
                         "players", engine.getPlayers() 
                 ));
@@ -747,13 +801,14 @@ public class CatanApplication {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An unexpected error occurred: " + e.getMessage());
         }
 
-        // detailed logging w claude
+        
     }
 
     @GetMapping("/api/games/{gameId}")
     public ResponseEntity<?> getGameById(
             @PathVariable long gameId,
             @RequestHeader(value = "Authorization", required = false) String idToken) {
+        logger.info("[API_CALL] GET /api/games/{}", gameId);
         try {
             try (Connection conn = dcm.getConnection()) {
                 GameDAO gameDAO = new GameDAO(conn);
@@ -778,28 +833,26 @@ public class CatanApplication {
 
                 
                 if (game.isInProgress() && game.getJsonHexes() != null && !game.getJsonHexes().equals("[]")) {
-                    System.out.println("[DEBUG] Game " + gameId + " is in progress. Loading GameEngine to provide board state.");
                     GameEngine engine;
                     try {
                         engine = new GameEngine(gameId); 
                     } catch (Exception e) {
-                        System.err.println("[ERROR] Failed to initialize GameEngine for game " + gameId + " during GET: " + e.getMessage());
                         e.printStackTrace();
                         return ResponseEntity.ok().body(Map.of("game", game, "error", "Could not load board state"));
                     }
                     
                     Map<String, Object> response = new HashMap<>();
-                    response.put("game", game); // Game DTO (name, flags, bank, List<Account> for players)
+                    response.put("game", game); // game DTO (name, flags, bank, List<Account> for players)
                     response.put("boardState", Map.of(
-                        "hexes", engine.getHexes(),         // List<Hex>
-                        "vertices", engine.getVertices(),   // List<Vertex>
-                        "edges", engine.getEdges(),         // List<Edge>
+                        "hexes", engine.getHexes(),         // list<Hex>
+                        "vertices", engine.getVertices(),   // list<Vertex>
+                        "edges", engine.getEdges(),         // list<Edge>
                         "players", engine.getPlayers()      // Map<Long, Player (in-game state)>
                     ));
                     response.put("robberLocation", engine.getRobberLocation());
                     return ResponseEntity.ok().body(response);
                 } else {
-                    return ResponseEntity.ok().body(Map.of("game", game)); // Only basic game data (lobby view)
+                    return ResponseEntity.ok().body(Map.of("game", game)); // only basic game data (lobby view)
                 }
 
         } catch (SQLException e) {
@@ -817,38 +870,48 @@ public class CatanApplication {
             @PathVariable long gameId,
             @RequestHeader("Authorization") String idToken,
             @RequestBody SetupActionRequest request) {
+        logger.info("[API_CALL] POST /api/games/{}/setup-action", gameId);
         logger.info("[SETUP_ACTION] Received for game ID: {}, action: {}, accountId: {}", gameId, request.getActionType(), request.getAccountId());
         try {
             String email = firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
-            AccountDAO accountDAO = new AccountDAO(dcm.getConnection()); // Assuming dcm is accessible
-            Account account = accountDAO.findByEmail(email);
-
-            if (account == null || account.getId() != request.getAccountId()) {
-                logger.warn("[SETUP_ACTION] Mismatch or unverified account. Token email: {}, Request accountId: {}", email, request.getAccountId());
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Account ID mismatch or invalid token");
+            Account currentAccount;
+            try (Connection conn = dcm.getConnection()) {
+                AccountDAO accountDAO = new AccountDAO(conn);
+                currentAccount = accountDAO.findByEmail(email);
+                if (currentAccount == null || currentAccount.getId() != request.getAccountId()) {
+                    logger.warn("[SETUP_ACTION] Account ID mismatch or invalid token. Token email: {}, Request accountId: {}", email, request.getAccountId());
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Account ID mismatch or invalid token");
+                }
             }
             logger.info("[SETUP_ACTION] Account {} verified for action.", request.getAccountId());
 
             GameEngine engine = new GameEngine(gameId); // loads current game state
             boolean success = false;
+            Integer locationId = null;
 
             if ("SETTLEMENT".equalsIgnoreCase(request.getActionType())) {
                 if (request.getVertexId() == null) {
                     logger.warn("[SETUP_ACTION] VertexId is null for SETTLEMENT action.");
                     return ResponseEntity.badRequest().body("Vertex ID is required for settlement placement.");
                 }
-                logger.info("[SETUP_ACTION] Attempting to place initial settlement for account {} at vertex {} (isSecond: {}).", 
-                            request.getAccountId(), request.getVertexId(), request.isSecondRoundPlacement());
-                success = engine.placeInitialSettlement(request.getAccountId(), request.getVertexId(), request.isSecondRoundPlacement());
+                locationId = request.getVertexId();
+                logger.info("[SETUP_ACTION] Calling engine.performSetupAction for SETTLEMENT at vertex {} by account {}.", 
+                            locationId, request.getAccountId());
+                success = engine.performSetupAction(request.getAccountId(), request.getActionType(), locationId, request.isSecondRoundPlacement());
             } else if ("ROAD".equalsIgnoreCase(request.getActionType())) {
-                if (request.getV1() == null || request.getV2() == null) {
-                     logger.warn("[SETUP_ACTION] Vertex IDs v1 or v2 are null for ROAD action.");
-                    return ResponseEntity.badRequest().body("Vertex IDs (v1, v2) are required for road placement.");
+                if (request.getEdgeId() == null) {
+                     logger.warn("[SETUP_ACTION] EdgeId is null for ROAD action.");
+                    return ResponseEntity.badRequest().body("Edge ID is required for road placement.");
                 }
-                 logger.info("[SETUP_ACTION] Attempting to place initial road for account {} between vertices {} and {}.", 
-                            request.getAccountId(), request.getV1(), request.getV2());
-                logger.warn("[SETUP_ACTION] placeInitialRoad functionality is not yet fully implemented in GameEngine.");
-                success = true; 
+                try {
+                    locationId = Integer.parseInt(request.getEdgeId());
+                } catch (NumberFormatException e) {
+                    logger.warn("[SETUP_ACTION] Invalid EdgeId format: {}. Must be an integer.", request.getEdgeId());
+                    return ResponseEntity.badRequest().body("Invalid Edge ID format. Must be an integer.");
+                }
+                logger.info("[SETUP_ACTION] Calling engine.performSetupAction for ROAD on edge {} by account {}.", 
+                            locationId, request.getAccountId());
+                success = engine.performSetupAction(request.getAccountId(), request.getActionType(), locationId, false); // isSecondRoundPlacement is not relevant for roads
             } else {
                 logger.warn("[SETUP_ACTION] Unknown action type: {}", request.getActionType());
                 return ResponseEntity.badRequest().body("Unknown action type");
@@ -856,22 +919,40 @@ public class CatanApplication {
 
             if (success) {
                 logger.info("[SETUP_ACTION] Action successful for game {}. Persisting and returning updated state.", gameId);
-                GameDAO gameDAO = new GameDAO(dcm.getConnection());
-                Game updatedGame = gameDAO.findById(gameId);
-                if (updatedGame.getPlayers() == null || updatedGame.getPlayers().isEmpty()) { /* ... code to populate players ... */ }
+                Game updatedGame; // fetch the fully updated game state after engine.performSetupAction persisted it
+                try (Connection conn = dcm.getConnection()) {
+                    GameDAO gameDAO = new GameDAO(conn);
+                    updatedGame = gameDAO.findById(gameId);
+                    if (updatedGame.getPlayers() == null || updatedGame.getPlayers().isEmpty()) { 
+                        AccountDAO accountDAO = new AccountDAO(conn); // re-fetch accounts for the player list
+                        List<Account> playersInGame = new ArrayList<>();
+                        if (updatedGame.getPlayerList() != null) {
+                            for (Long playerId : updatedGame.getPlayerList()) {
+                                Account playerAccount = accountDAO.findById(playerId);
+                                if (playerAccount != null) {
+                                    playersInGame.add(playerAccount);
+                                }
+                            }
+                        }
+                        updatedGame.setPlayers(playersInGame);
+                    }
+                }
 
                 Map<String, Object> responseMap = new HashMap<>();
-                responseMap.put("game", updatedGame);
+                responseMap.put("game", updatedGame); // this game DTO now includes up-to-date setup phase fields
                 responseMap.put("boardState", Map.of(
                         "hexes", engine.getHexes(),
-                        "vertices", engine.getVertices(), // send updated vertices
-                        "edges", engine.getEdges(),     // send updated edges
-                        "players", engine.getPlayers()  // send updated player game states (resources etc)
+                        "vertices", engine.getVertices(), 
+                        "edges", engine.getEdges(),     
+                        "players", engine.getPlayers()  
                 ));
+                responseMap.put("currentTurnPlayerId", engine.getCurrentTurnPlayerId());
+                responseMap.put("isSetupPhaseComplete", engine.isSetupPhaseComplete());
+
                 return ResponseEntity.ok().body(responseMap);
             } else {
-                logger.warn("[SETUP_ACTION] Action failed for game {}. Conditions not met or error in GameEngine.", gameId);
-                return ResponseEntity.badRequest().body("Action failed (e.g., invalid placement)");
+                logger.warn("[SETUP_ACTION] Action failed for game {}. Engine returned false.", gameId);
+                return ResponseEntity.badRequest().body("Action failed (e.g., invalid placement, not your turn, or setup rules violation)");
             }
 
         } catch (FirebaseAuthException e) {
@@ -885,6 +966,116 @@ public class CatanApplication {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Game logic error: " + e.getMessage());
         } catch (Exception e) {
             logger.error("[SETUP_ACTION] Unexpected generic error: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An unexpected error occurred");
+        }
+    }
+
+    // DTO for dice roll request - only needs accountId for turn verification
+    private static class DiceRollRequest {
+        @JsonProperty("accountId")
+        private long accountId;
+
+        public long getAccountId() { return accountId; }
+        public void setAccountId(long accountId) { this.accountId = accountId; }
+    }
+
+    // DTO for dice roll response
+    private static class DiceRollResponse {
+        public int dice1;
+        public int dice2;
+        public int sum;
+
+        public DiceRollResponse(int d1, int d2, int s) {
+            this.dice1 = d1;
+            this.dice2 = d2;
+            this.sum = s;
+        }
+        // getters are needed for json serialization if fields are private
+        public int getDice1() { return dice1; }
+        public int getDice2() { return dice2; }
+        public int getSum() { return sum; }
+    }
+
+    @PostMapping("/api/games/{gameId}/roll-dice")
+    public ResponseEntity<?> rollDice(
+            @PathVariable long gameId,
+            @RequestHeader("Authorization") String idToken,
+            @RequestBody DiceRollRequest request) {
+        logger.info("[API_CALL] POST /api/games/{}/roll-dice", gameId);
+        logger.info("[ROLL_DICE] Received for game ID: {}, accountId: {}", gameId, request.getAccountId());
+        try {
+            String email = firebaseAuthService.verifyToken(idToken.replace("Bearer ", ""));
+            Account currentAccount;
+            Game gameForTurnCheck;
+            try (Connection conn = dcm.getConnection()) {
+                AccountDAO accountDAO = new AccountDAO(conn);
+                currentAccount = accountDAO.findByEmail(email);
+                if (currentAccount == null || currentAccount.getId() != request.getAccountId()) {
+                    logger.warn("[ROLL_DICE] Account ID mismatch or invalid token. Token email: {}, Request accountId: {}", email, request.getAccountId());
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Account ID mismatch or invalid token");
+                }
+
+                GameDAO gameDAO = new GameDAO(conn); // new connection for this DAO
+                gameForTurnCheck = gameDAO.findById(gameId);
+                if (gameForTurnCheck == null) {
+                    logger.warn("[ROLL_DICE] Game not found: {}", gameId);
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Game not found");
+                }
+                if (gameForTurnCheck.getPlayerList().size() > 1 && !gameForTurnCheck.getPlayerList().get(0).equals(request.getAccountId())) {
+                }
+
+            } // connection for account/game check closes here
+            
+            logger.info("[ROLL_DICE] Account {} verified for dice roll in game {}.", request.getAccountId(), gameId);
+
+            GameEngine engine = new GameEngine(gameId); // loads current game state
+            GameEngine.DiceRollResult diceResult = engine.rollDiceAndDistributeResources(request.getAccountId());
+
+            // fetch the updated game state to return
+            Game updatedGame;
+            try (Connection conn = dcm.getConnection()) {
+                GameDAO gameDAO = new GameDAO(conn);
+                updatedGame = gameDAO.findById(gameId);
+                 if (updatedGame.getPlayers() == null || updatedGame.getPlayers().isEmpty()) {
+                    AccountDAO accountDAO = new AccountDAO(conn);
+                    List<Account> playersInGame = new ArrayList<>();
+                    if (updatedGame.getPlayerList() != null) {
+                        for (Long playerId : updatedGame.getPlayerList()) {
+                            Account playerAccount = accountDAO.findById(playerId);
+                            if (playerAccount != null) {
+                                playersInGame.add(playerAccount);
+                            }
+                        }
+                    }
+                    updatedGame.setPlayers(playersInGame);
+                }
+            } // connection for fetching updated game closes here
+
+            Map<String, Object> responseMap = new HashMap<>();
+            responseMap.put("game", updatedGame); // contains currentDiceRoll updated by engine
+            responseMap.put("boardState", Map.of(
+                    "hexes", engine.getHexes(),
+                    "vertices", engine.getVertices(),
+                    "edges", engine.getEdges(),
+                    "players", engine.getPlayers() // player resources updated
+            ));
+            responseMap.put("diceRoll", new DiceRollResponse(diceResult.getDice1(), diceResult.getDice2(), diceResult.getSum()));
+
+            logger.info("[ROLL_DICE] Dice roll processed for game {}. Player {} rolled {} + {} = {}. Returning updated state.", 
+                        gameId, request.getAccountId(), diceResult.getDice1(), diceResult.getDice2(), diceResult.getSum());
+            return ResponseEntity.ok().body(responseMap);
+
+        } catch (FirebaseAuthException e) {
+            logger.error("[ROLL_DICE] Firebase Auth error: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid token");
+        } catch (SQLException e) {
+            logger.error("[ROLL_DICE] SQL error: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Database error");
+        } catch (RuntimeException e) {
+            logger.error("[ROLL_DICE] Runtime error: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Game logic error: " + e.getMessage()); 
+        } catch (Exception e) {
+            logger.error("[ROLL_DICE] Unexpected generic error: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An unexpected error occurred");
         }
     }

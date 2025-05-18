@@ -22,9 +22,47 @@ public class Player {
     private int victoryPointCards;
     private boolean hasLargestArmy;
     private boolean hasLongestRoad;
+    private int knightsPlayed;
+    private boolean longestRoad;
+    private boolean largestArmy;
+    private Map<String, Integer> resources;
+    private Map<String, Integer> developmentCards;
 
     public Player() {
         // default constructor for json deserialization
+        this.resources = new HashMap<>();
+        this.developmentCards = new HashMap<>();
+        // initialize individual resource counts to 0, matching the parameterized constructor
+        this.wood = 0;
+        this.brick = 0;
+        this.sheep = 0;
+        this.wheat = 0;
+        this.ore = 0;
+        // initialize resource map entries to 0 as well for consistency, 
+        // though Jackson might overwrite these if present in JSON.
+        // it's good practice for the object to be in a consistent state after default construction.
+        this.resources.put("wood", 0);
+        this.resources.put("brick", 0);
+        this.resources.put("sheep", 0);
+        this.resources.put("wheat", 0);
+        this.resources.put("ore", 0);
+
+        this.developmentCards.put("knight", 0);
+        this.developmentCards.put("victoryPoint", 0);
+        this.developmentCards.put("roadBuilding", 0);
+        this.developmentCards.put("yearOfPlenty", 0);
+        this.developmentCards.put("monopoly", 0);
+        
+        // Initialize other fields to sensible defaults if not handled by deserialization explicitly
+        this.victoryPoints = 0;
+        this.numSettlements = 0;
+        this.numCities = 0;
+        this.numRoads = 0;
+        this.knightsPlayed = 0;
+        this.longestRoad = false;
+        this.largestArmy = false;
+        this.hasLargestArmy = false; // Ensure these are also initialized
+        this.hasLongestRoad = false; // Ensure these are also initialized
     }
 
     public Player(long accountId) {
@@ -34,6 +72,29 @@ public class Player {
         this.numSettlements = 0;
         this.numCities = 0;
         this.numRoads = 0;
+        this.knightsPlayed = 0;
+        this.longestRoad = false;
+        this.largestArmy = false;
+        this.resources = new HashMap<>();
+        this.developmentCards = new HashMap<>();
+        // initialize resources to 0
+        this.resources.put("wood", 0);
+        this.resources.put("brick", 0);
+        this.resources.put("sheep", 0);
+        this.resources.put("wheat", 0);
+        this.resources.put("ore", 0);
+        // initialize individual resource counts for direct access if needed
+        this.wood = 0;
+        this.brick = 0;
+        this.sheep = 0;
+        this.wheat = 0;
+        this.ore = 0;
+        // initialize dev cards to 0
+        this.developmentCards.put("knight", 0);
+        this.developmentCards.put("victoryPoint", 0);
+        this.developmentCards.put("roadBuilding", 0);
+        this.developmentCards.put("yearOfPlenty", 0);
+        this.developmentCards.put("monopoly", 0);
         this.hasLargestArmy = false;
         this.hasLongestRoad = false;
     }
@@ -55,23 +116,30 @@ public class Player {
         this.wood -= wood;
     }
 
-    public void addResource(String resource, int amount) {
-        switch (resource.toLowerCase()) {
-            case "brick": brick += amount; break;
-            case "ore": ore += amount; break;
-            case "sheep": sheep += amount; break;
-            case "wheat": wheat += amount; break;
-            case "wood": wood += amount; break;
+    public void addResource(String resourceType, int amount) {
+        resourceType = resourceType.toLowerCase();
+        this.resources.put(resourceType, this.resources.getOrDefault(resourceType, 0) + amount);
+        // update individual counts
+        switch (resourceType) {
+            case "wood": this.wood += amount; break;
+            case "brick": this.brick += amount; break;
+            case "sheep": this.sheep += amount; break;
+            case "wheat": this.wheat += amount; break;
+            case "ore": this.ore += amount; break;
         }
     }
 
-    public void deductResource(String resource, int amount) {
-        switch (resource.toLowerCase()) {
-            case "brick": brick -= amount; break;
-            case "ore": ore -= amount; break;
-            case "sheep": sheep -= amount; break;
-            case "wheat": wheat -= amount; break;
-            case "wood": wood -= amount; break;
+    public void deductResource(String resourceType, int amount) {
+        resourceType = resourceType.toLowerCase();
+        int currentAmount = this.resources.getOrDefault(resourceType, 0);
+        this.resources.put(resourceType, Math.max(0, currentAmount - amount));
+        // Update individual counts
+        switch (resourceType) {
+            case "wood": this.wood = Math.max(0, this.wood - amount); break;
+            case "brick": this.brick = Math.max(0, this.brick - amount); break;
+            case "sheep": this.sheep = Math.max(0, this.sheep - amount); break;
+            case "wheat": this.wheat = Math.max(0, this.wheat - amount); break;
+            case "ore": this.ore = Math.max(0, this.ore - amount); break;
         }
     }
 
@@ -173,7 +241,7 @@ public class Player {
         numRoads--;
     }
 
-    // Victory Point Management
+    // vp
     public void addVictoryPoint() {
         victoryPoints++;
     }
@@ -240,10 +308,15 @@ public class Player {
     public void setLongestRoad(boolean hasLongestRoad) { this.hasLongestRoad = hasLongestRoad; }
 
     public void addInitialResourcesFromSettlement(List<Hex> adjacentHexes) {
-        if (adjacentHexes == null) return;
+        if (adjacentHexes == null) {
+            return;
+        }
+        System.out.println("[Player " + this.accountId + "] Granting initial resources from settlement. Adjacent hexes count: " + adjacentHexes.size());
         for (Hex hex : adjacentHexes) {
             if (hex != null && !"desert".equalsIgnoreCase(hex.getType())) {
-                addResource(hex.getType(), 1);
+                String resourceType = hex.getType().toLowerCase();
+                addResource(resourceType, 1); // Add 1 of the hex's resource type
+                System.out.println("[Player " + this.accountId + "] Received 1 " + resourceType + " from hex " + hex.getId());
             }
         }
     }

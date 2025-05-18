@@ -27,6 +27,10 @@ public class Hex {
     public int getPipValue() { return pipValue; }
     public void setPipValue(int pipValue) { this.pipValue = pipValue; }
 
+    public Integer getNumber() { 
+        return this.pipValue; 
+    }
+
     public boolean hasRobber() { return hasRobber; }
     public void setHasRobber(boolean hasRobber) { this.hasRobber = hasRobber; }
 

@@ -50,6 +50,16 @@ CREATE TABLE game (
     bank_road_building integer DEFAULT 2,
     bank_victory_point integer DEFAULT 5,
     bank_knight integer DEFAULT 14,
+
+    -- setup phase related stuff
+    current_turn_player_id bigint DEFAULT NULL, -- current player turn, FK added below
+    setup_phase_complete boolean DEFAULT FALSE,
+    current_setup_placement_index integer DEFAULT 0,
+    setup_placement_order text DEFAULT '[]', -- json string representing List<Long>
+    settlements_placed_in_setup_count text DEFAULT '{}', -- json string representing Map<Long, Integer>
+    roads_placed_in_setup_count text DEFAULT '{}', -- json string representing Map<Long, Integer>
+
     PRIMARY KEY (game_id),
-    FOREIGN KEY (winner_id) REFERENCES account (account_id)
+    FOREIGN KEY (winner_id) REFERENCES account (account_id),
+    FOREIGN KEY (current_turn_player_id) REFERENCES account (account_id)
 );

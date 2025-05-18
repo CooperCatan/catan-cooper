@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getAuth, signOut, User } from 'firebase/auth';
 import { XCircle, Home, Settings, X, Trophy } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
+import { getPlayerColor, PLAYER_COLORS } from '../../utils/playerColors';
 
 interface Game {
   id: number;
@@ -119,7 +120,7 @@ const GameCard: React.FC<{
             >
               <div 
                 className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: player.color || '#808080' }}
+                style={{ backgroundColor: getPlayerColor(index + 1) }}
               />
               <div className="flex items-center gap-1">
                 <span className="text-sm text-gray-700/90">{player.username}</span>
@@ -325,16 +326,14 @@ const GameLobby = () => {
         })
       );
 
-      // Check if the response is plain text
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('text/plain')) {
         const text = await response.text();
         if (text === "Game deleted") {
-          // If the game was deleted, remove it from the list
+          // if the game deleted, remove it from the list
           setGames(prevGames => prevGames.filter(game => game.id !== gameId));
         }
       }
-      // No else clause needed since we've already updated the player list
     } catch (error) {
       console.error('Error leaving game:', error);
       alert('Failed to leave game. Please try again.');
@@ -369,14 +368,14 @@ const GameLobby = () => {
       const newGame = await response.json();
       console.log('Created new game:', newGame);
 
-      // Close modal and clear input
+      // close modal and clear input
       setIsCreateModalOpen(false);
       setNewGameName('');
 
-      // Wait a short moment to ensure the game is fully created
+      // wait a short moment to ensure the game is fully created
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Refresh games list
+      // refresh games list
       const gamesResponse = await fetch('http://localhost:8080/api/games', {
         headers: {
           'Authorization': `Bearer ${idToken}`
@@ -403,7 +402,7 @@ const GameLobby = () => {
     }
   };
 
-  // Sort games with "Waiting" games first
+  // sort games with "Waiting" games first
   const sortedGames = [...games].sort((a, b) => {
     const aIsWaiting = !a.isGameOver && !a.winnerId && a.players && a.players.length < 4;
     const bIsWaiting = !b.isGameOver && !b.winnerId && b.players && b.players.length < 4;

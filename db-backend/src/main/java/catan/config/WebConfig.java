@@ -14,6 +14,6 @@ public class WebConfig implements WebMvcConfigurer {
             .allowedHeaders("Content-Type", "Accept", "Authorization", "Origin", "X-Requested-With", "Access-Control-Request-Method", "Access-Control-Request-Headers")
             .exposedHeaders("Access-Control-Allow-Origin", "Access-Control-Allow-Credentials", "Authorization")
             .allowCredentials(true)
-            .maxAge(3600); // Cache preflight request for 1 hour
+            .maxAge(3600); // cache preflight request for 1 hour
     }
 } 

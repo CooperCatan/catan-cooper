@@ -1,7 +1,4 @@
 -- changed s.t. we are not storing passwords as plaintext anymore, storing emails for firebase auth
--- massively simplified the sql backend, we do not need to handle the actual game state here, we can just
--- handle it in the backend application logic since it is transient data anyway. only interested in displaying
--- the players in the game, the game itself, the winner, and if it is completed. 
 
 INSERT INTO account (username, email, total_wins, total_losses, total_games, elo)
 VALUES 
@@ -15,14 +12,16 @@ INSERT INTO game (
     json_hexes, json_vertices, json_edges, json_players,
     current_dice_roll, robber_location,
     bank_brick, bank_ore, bank_sheep, bank_wheat, bank_wood,
-    bank_year_of_plenty, bank_monopoly, bank_road_building, bank_victory_point, bank_knight
+    bank_year_of_plenty, bank_monopoly, bank_road_building, bank_victory_point, bank_knight,
+    current_turn_player_id, setup_phase_complete
 )
 VALUES (
     1, ARRAY[1, 2], NULL, FALSE, TRUE, 'Casual Game',
     NULL, NULL, NULL, NULL,
     NULL, NULL,
     19, 19, 19, 19, 19,
-    2, 2, 2, 5, 14
+    2, 2, 2, 5, 14,
+    1, TRUE -- player 1's turn, setup is complete
 );
 
 -- game 2: completed game with a winner 

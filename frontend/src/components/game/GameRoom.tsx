@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth/AuthProvider';
 import { getAuth } from 'firebase/auth';
 import { Separator } from '@radix-ui/react-separator';
 import { XCircle } from 'lucide-react';
 import GameBoard from './GameBoard';
-import { PLAYER_COLORS } from './GameBoard';
+import ResourceCardsDisplay from './ResourceCardsDisplay';
+import BuildingCosts from './BuildingCosts';
+import { getPlayerColor, PLAYER_COLORS } from '../../utils/playerColors';
 import { cn } from '../../utils/cn';
 
 interface Player {
@@ -57,16 +60,24 @@ interface BoardState {
   }[];
 }
 
+interface GameData {
+  id: number;
+  gameName: string;
+  inProgress: boolean;
+  isGameOver: boolean;
+  playerList: number[];
+  players?: any[]; // not very strict typing
+  currentTurnPlayerId?: number | null;
+  setupPhaseComplete?: boolean;
+}
+
 const GameRoom = () => {
   const { gameId } = useParams();
   const navigate = useNavigate();
   const auth = getAuth();
-  const [countdown, setCountdown] = useState(60);
   const [players, setPlayers] = useState<Player[]>([]);
-  const [isSetupPhase, setIsSetupPhase] = useState(true);
   const [currentTurn, setCurrentTurn] = useState<number | null>(null);
-  const [isCurrentTurn, setIsCurrentTurn] = useState(false);
-  const [game, setGame] = useState<any | null>(null);
+  const [gameData, setGameData] = useState<any | null>(null);
   const [selectedAction, setSelectedAction] = useState<ActionType>(null);
   const [showTradeModal, setShowTradeModal] = useState(false);
   const [devCards, setDevCards] = useState<{
@@ -82,28 +93,40 @@ const GameRoom = () => {
     roadBuilding: 0,
     victoryPoint: 0
   });
-  const [gameData, setGameData] = useState<any | null>(null);
   const [boardState, setBoardState] = useState<any | null>(null);
   const [currentAccountId, setCurrentAccountId] = useState<number | null>(null);
 
-  const processPlayersData = (playersArray: any[], currentUserEmail: string | null | undefined) => {
-    return playersArray.map((p: any) => ({
-      ...p,
-      isCurrentUser: p.email === currentUserEmail,
-      devCards: p.devCards ? {
-        knight: p.devCards.knight || 0,
-        yearOfPlenty: p.devCards.yearOfPlenty || 0,
-        monopoly: p.devCards.monopoly || 0,
-        roadBuilding: p.devCards.roadBuilding || 0,
-        victoryPoint: p.devCards.victoryPoint || 0,
-      } : {
-        knight: 0,
-        yearOfPlenty: 0,
-        monopoly: 0,
-        roadBuilding: 0,
-        victoryPoint: 0,
-      }
-    }));
+  // DERIVED STATE for setup phase
+  // TODO: wht is going on here
+  const actualIsSetupPhase = gameData && gameData.inProgress && !gameData.setupPhaseComplete;
+  const gameIsTrulyInProgress = gameData && gameData.inProgress; // more general flag for "game has started and not over"
+
+  const processPlayersData = (
+    playersArray: any[], 
+    playerList: number[], // ordered list of player account IDs
+    currentUserEmail: string | null | undefined
+  ) => {
+    return playersArray.map((p: any) => {
+      const playerOrder = playerList.indexOf(p.id) + 1; // p.id is accountId. Find its 1-based order.
+      return {
+        ...p,
+        isCurrentUser: p.email === currentUserEmail,
+        color: getPlayerColor(playerOrder > 0 ? playerOrder : undefined), // Use playerOrder for color
+        devCards: p.devCards ? {
+          knight: p.devCards.knight || 0,
+          yearOfPlenty: p.devCards.yearOfPlenty || 0,
+          monopoly: p.devCards.monopoly || 0,
+          roadBuilding: p.devCards.roadBuilding || 0,
+          victoryPoint: p.devCards.victoryPoint || 0,
+        } : {
+          knight: 0,
+          yearOfPlenty: 0,
+          monopoly: 0,
+          roadBuilding: 0,
+          victoryPoint: 0,
+        }
+      };
+    });
   };
 
   useEffect(() => {
@@ -120,7 +143,7 @@ const GameRoom = () => {
         const token = await currentUser.getIdToken();
         const headers = { 'Authorization': `Bearer ${token}` };
         
-        // Fetch game details
+        // fetch game details
         const gameResponse = await fetch(`http://localhost:8080/api/games/${gameId}`, { headers });
         console.log('[DEBUG] Game fetch response status:', gameResponse.status);
         if (!gameResponse.ok) {
@@ -130,12 +153,18 @@ const GameRoom = () => {
         const gameDetails = await gameResponse.json();
         console.log('[DEBUG] Fetched game data (initial):', gameDetails);
         setGameData(gameDetails.game);
+        if (gameDetails.game && gameDetails.game.currentTurnPlayerId !== undefined) {
+          setCurrentTurn(gameDetails.game.currentTurnPlayerId);
+          console.log('[DEBUG] Initial currentTurn set from gameDetails.game.currentTurnPlayerId:', gameDetails.game.currentTurnPlayerId);
+        } else {
+          console.log('[DEBUG] Initial currentTurnPlayerId not present in gameDetails.game.');
+        }
+
         if (gameDetails.boardState) {
           setBoardState(gameDetails.boardState);
         } else {
           setBoardState(null);
         }
-        // setGame(gameDetails.game); // Keep if old 'game' state is used elsewhere, else remove
 
         // fetch current user's account details to get numeric ID
         const accountResponse = await fetch(`http://localhost:8080/api/account/by-email`, {
@@ -149,11 +178,10 @@ const GameRoom = () => {
           setCurrentAccountId(accountData.id); // store the numeric account ID
           // process players after getting current user's account ID to correctly set isCurrentUser
           const fetchedPlayers = gameDetails.game.players || [];
-          setPlayers(processPlayersData(fetchedPlayers, currentUser.email)); // email for isCurrentUser logic
+          const orderedPlayerIds = gameDetails.game.playerList || []; // Get playerList
+          setPlayers(processPlayersData(fetchedPlayers, orderedPlayerIds, currentUser.email)); // Pass orderedPlayerIds
         } else {
           console.error('[ERROR] Failed to fetch current user account data.');
-           // handle case where account might not exist in DB yet if it's a new user straight to game room
-           // should not hapen bc the gameLobby, gameRoom, etc is a protected path
         }
 
       } catch (error) {
@@ -163,42 +191,43 @@ const GameRoom = () => {
 
     fetchInitialData();
 
-    // set up countdown timer -- unused
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
 
-    return () => {
-      clearInterval(timer);
-    };
+
   }, [auth, navigate, gameId]);
 
   useEffect(() => {
-    console.log('[DEBUG] Setting up game state polling, gameData:', gameData);
-    // poll if gameId exists and game is not over (or gameData is not yet loaded)
+
     if (gameId && (!gameData || !gameData.isGameOver)) {
       const interval = setInterval(() => {
-        console.log('[DEBUG] Polling game state...');
         fetchGameState().catch(error => {
           console.error('[ERROR] Game state polling failed:', error);
         });
-      }, 5000); // poll every 5 seconds
+      }, 3000); // poll every 3 seconds
 
       return () => {
-        console.log('[DEBUG] Cleaning up game state polling');
         clearInterval(interval);
       };
     }
   }, [gameId, gameData]); // depend on gameData to re-evaluate polling when game status changes
 
+  // new useEffect to sync current user's dev cards
+  useEffect(() => {
+    const currentUserData = players.find(p => p.isCurrentUser);
+    if (currentUserData && currentUserData.devCards) {
+      setDevCards(currentUserData.devCards);
+    } else {
+      // reset if no current user or no dev cards for them, or if players array is empty
+      setDevCards({
+        knight: 0,
+        yearOfPlenty: 0,
+        monopoly: 0,
+        roadBuilding: 0,
+        victoryPoint: 0
+      });
+    }
+  }, [players]); // re-run when players array changes (which happens after initial fetch and polling)
+
   const fetchGameState = async () => {
-    console.log('[DEBUG] Fetching game state for gameId:', gameId);
     if (!auth.currentUser) {
       console.warn('[WARN] User not authenticated, skipping fetchGameState');
       return; 
@@ -207,7 +236,6 @@ const GameRoom = () => {
       const token = await auth.currentUser.getIdToken();
       const headers = { 'Authorization': `Bearer ${token}` }; // Add auth header for polling too
       const response = await fetch(`http://localhost:8080/api/games/${gameId}`, { headers });
-      console.log('[DEBUG] Polled game state fetch response status:', response.status);
       
       if (!response.ok) {
         console.error('[ERROR] Failed to fetch polled game state:', {
@@ -215,38 +243,58 @@ const GameRoom = () => {
           statusText: response.statusText,
           url: response.url
         });
-        if (response.status === 404) {
-          console.warn('[WARN] Game not found during polling, navigating to lobby.');
-          navigate('/lobby');
-        }
+
         return; 
       }
 
       const data = await response.json();
-      console.log('[DEBUG] Received polled game state:', data);
       
       if (data.game) {
-        console.log(`[DEBUG] Polled game data - gameId: ${data.game.id}, inProgress: ${data.game.inProgress}`);
-        setGameData(data.game);
+        setGameData((prevGameData: GameData | null) => {
+          if (JSON.stringify(prevGameData) !== JSON.stringify(data.game)) {
+            return data.game;
+          }
+          return prevGameData;
+        });
+
         const fetchedPlayers = data.game.players || [];
         const currentUserEmail = auth.currentUser?.email;
-        setPlayers(processPlayersData(fetchedPlayers, currentUserEmail));
+        const orderedPlayerIds = data.game.playerList || []; // get playerList from current game data
+        const processedPlayers = processPlayersData(fetchedPlayers, orderedPlayerIds, currentUserEmail); // Pass orderedPlayerIds
+        setPlayers((prevPlayers: Player[]) => {
+          if (JSON.stringify(prevPlayers) !== JSON.stringify(processedPlayers)) {
+            return processedPlayers;
+          }
+          return prevPlayers;
+        });
       } else {
-        console.warn('[WARN] Polled data missing game object');
       }
       
       if (data.boardState) {
-        console.log('[DEBUG] Received boardState in poll, updating local boardState.');
-        setBoardState(data.boardState);
-      } else if (data.game && !data.game.inProgress) {
-        console.log('[DEBUG] Game not in progress (from poll) and no boardState in poll, clearing local boardState.');
-        setBoardState(null);
+        setBoardState((prevBoardState: BoardState | null) => {
+          if (JSON.stringify(prevBoardState) !== JSON.stringify(data.boardState)) {
+            return data.boardState;
+          }
+          return prevBoardState;
+        });
+      } else if (data.game && !data.game.inProgress && !actualIsSetupPhase) {
+        setBoardState((prevBoardState: BoardState | null) => {
+          if (prevBoardState !== null) {
+            return null;
+          }
+          return prevBoardState;
+        });
+      } else if (data.game && !data.game.inProgress && actualIsSetupPhase) {
       }
 
       // update whose the current turn
-      if (data.game && data.game.currentTurn) {
-        console.log('[DEBUG] Setting current turn from poll:', data.game.currentTurn);
-        setCurrentTurn(data.game.currentTurn);
+      if (data.game && data.game.currentTurnPlayerId !== undefined) {
+        setCurrentTurn((prevCurrentTurn: number | null) => {
+          if (prevCurrentTurn !== data.game.currentTurnPlayerId) {
+            return data.game.currentTurnPlayerId;
+          }
+          return prevCurrentTurn;
+        });
       }
     } catch (error) {
       console.error('[ERROR] Error fetching polled game state:', error);
@@ -255,43 +303,38 @@ const GameRoom = () => {
   };
 
   const handleTurnComplete = () => {
-    if (!game || currentTurn === null) return;
+    if (!gameData || currentTurn === null) return;
 
     // get current player index
-    const currentPlayerIndex = game.playerList.indexOf(currentTurn);
+    const currentPlayerIndex = gameData.playerList.indexOf(currentTurn);
     let nextPlayerIndex;
 
-    if (isSetupPhase) {
+    if (actualIsSetupPhase) {
+      // TODO: look at this again
       // during setup phase:
-      // first round: 0 -> 1 -> 2 -> 3
-      // second round: 3 -> 2 -> 1 -> 0
-      const isFirstRound = game.playerList.every((playerId: number) => {
-        const player = players.find(p => p.id === playerId);
-        return player?.devCards.roadBuilding === 0;
-      });
-
-      if (isFirstRound) {
-        // move forward
-        nextPlayerIndex = (currentPlayerIndex + 1) % game.playerList.length;
-        if (nextPlayerIndex === 0) {
-          // start second round
-          nextPlayerIndex = game.playerList.length - 1;
-        }
-      } else {
-        // move backward
-        nextPlayerIndex = currentPlayerIndex - 1;
-        if (nextPlayerIndex < 0) {
-          // setup phase complete
-          setIsSetupPhase(false);
-          nextPlayerIndex = 0; // start with first player for regular game
-        }
-      }
+      // Backend handles actual setup turn order via setupPlacementOrder and currentSetupPlacementIndex
+      // Frontend just needs to signal completion of an action. Backend determines next turn and if setup is over.
+      // The complex logic for first/second round can be removed here, as backend response will dictate new currentTurn.
+      // We simply expect the backend to update currentTurnPlayerId and setupPhaseComplete.
+      // This function might not even be needed if backend response from actions correctly sets new turn.
+      // For now, keep a simplified version if strictly client-side turn advancement is desired for UI responsiveness,
+      // but it should align with backend truth.
+      // The backend /api/games/{gameId}/setup-action now triggers advanceSetupTurn in GameEngine,
+      // which updates currentTurnPlayerId and setupPhaseComplete and persists.
+      // So, the response from setup-action in GameRoom's handleSetupActionSuccess should update currentTurn and gameData.
+      // This handleTurnComplete might be redundant for setup phase or only for non-setup.
+      
+      // If this is called, it means a setup action was done, and we are waiting for backend to tell us the new state.
+      // The 'currentTurn' should be updated via polling or the response of the action itself.
+      // The old logic of manually calculating next setup turn player is removed.
+      console.log("[GameRoom] handleTurnComplete called during setup. Backend should dictate next turn via action response or polling.");
+      // No explicit setIsSetupPhase(false) here; it's derived from gameData.setupPhaseComplete.
+      return; // Let action response / polling handle state changes.
     } else {
       // regular game: clockwise rotation
-      nextPlayerIndex = (currentPlayerIndex + 1) % game.playerList.length;
+      nextPlayerIndex = (currentPlayerIndex + 1) % gameData.playerList.length;
+      setCurrentTurn(gameData.playerList[nextPlayerIndex]); // Update currentTurn for regular phase
     }
-
-    setCurrentTurn(game.playerList[nextPlayerIndex]);
   };
 
   const handleStartGame = async () => {
@@ -351,21 +394,6 @@ const GameRoom = () => {
         throw new Error('Invalid server response: missing game data');
       }
 
-      // +++ DEBUG LOG: Check received vertices before setting state +++
-      if (data.boardState && data.boardState.vertices) {
-          const receivedVertices = data.boardState.vertices;
-          console.log(`[GameRoom DEBUG] Received ${receivedVertices.length} vertices from API.`);
-          if (receivedVertices.length > 0) {
-              console.log('[GameRoom DEBUG] First received vertex:', JSON.stringify(receivedVertices[0]));
-              console.log('[GameRoom DEBUG] Last received vertex:', JSON.stringify(receivedVertices[receivedVertices.length - 1]));
-              // Check specifically for vertex 55
-              const vertex55 = receivedVertices.find((v: any) => v.id === 55);
-              console.log('[GameRoom DEBUG] Found vertex with ID 55 in received data:', !!vertex55, vertex55 ? JSON.stringify(vertex55) : 'Not Found');
-          }
-      } else {
-          console.warn('[GameRoom DEBUG] No boardState.vertices received in API response.');
-      }
-      // +++ END DEBUG LOG +++
 
       console.log(`[DEBUG] Game data from start response - gameId: ${data.game.id}, inProgress: ${data.game.inProgress}, name: ${data.game.gameName}`);
 
@@ -385,31 +413,24 @@ const GameRoom = () => {
         console.warn('No board state received in response');
       }
 
+
       // set init turn order - host (first player) goes first 
       // can change later to allow shuffling of players
       if (data.game.playerList && data.game.playerList.length > 0) {
         console.log('Setting initial turn to:', data.game.playerList[0]);
         setCurrentTurn(data.game.playerList[0]);
         
-        // if current user is first player, enable their turn
-        const currentPlayer = players.find(p => p.isCurrentUser);
-        if (currentPlayer && currentPlayer.id === data.game.playerList[0]) {
-          console.log('Enabling turn for current player:', currentPlayer.id);
-          setIsCurrentTurn(true);
-        }
       } else {
         console.warn('No player list in game data:', data.game);
       }
 
-      // show a message to indicate game has started
-      alert('Game has started! First player can now take their turn.');
     } catch (error: any) {
       console.error('Error in handleStartGame:', {
         error,
         message: error.message,
         stack: error.stack,
         gameId,
-        currentGameState: game,
+        currentGameState: gameData,
         currentPlayers: players
       });
       alert(`Failed to start game: ${error.message || 'Unknown error occurred'}`);
@@ -429,7 +450,7 @@ const GameRoom = () => {
   };
 
   const handleGameAction = async (locationId: string | number) => {
-    if (!gameId || !selectedAction || !game) return;
+    if (!gameId || !selectedAction || !gameData) return;
 
     const currentPlayer = players.find(p => p.isCurrentUser);
     if (!currentPlayer) return;
@@ -452,7 +473,7 @@ const GameRoom = () => {
       }
 
       const data = await response.json();
-      // Update player resources and game state
+      // update player resources and game state
       const updatedPlayers = players.map(p => 
         p.id === currentPlayer.id ? { ...p, ...data.player } : p
       );
@@ -464,7 +485,7 @@ const GameRoom = () => {
   };
 
   const handleEndTurn = async () => {
-    if (!gameId || !game) return;
+    if (!gameId || !gameData) return;
 
     const currentPlayer = players.find(p => p.isCurrentUser);
     if (!currentPlayer) return;
@@ -487,7 +508,7 @@ const GameRoom = () => {
       const data = await response.json();
       
       // update game state
-      setGame(data.game);
+      setGameData(data.game);
       
       // if game is over, show winner
       if (data.game.isGameOver) {
@@ -505,7 +526,7 @@ const GameRoom = () => {
   };
 
   const handleBuyDevCard = async () => {
-    if (!gameId || !game) return;
+    if (!gameId || !gameData) return;
 
     const currentPlayer = players.find(p => p.isCurrentUser);
     if (!currentPlayer) return;
@@ -538,7 +559,7 @@ const GameRoom = () => {
   };
 
   const handlePlayDevCard = async (cardType: string) => {
-    if (!gameId || !game) return;
+    if (!gameId || !gameData) return;
 
     const currentPlayer = players.find(p => p.isCurrentUser);
     if (!currentPlayer) return;
@@ -610,32 +631,106 @@ const GameRoom = () => {
       
       // update game state if needed
       if (data.game) {
-        setGame(data.game);
+        setGameData(data.game);
       }
     } catch (error) {
       console.error('Error playing development card:', error);
     }
   };
 
-  // what is going on here???
   const handleSetupActionSuccess = (responseData: any) => {
     console.log('[GameRoom] Setup action successful, updating state:', responseData);
     if (responseData.game) {
-      setGameData(responseData.game);
-      // potentially update players list if responseData.game.players is more current
+      setGameData({ 
+        ...responseData.game,
+        playerList: [...(responseData.game.playerList || [])],
+        players: responseData.game.players ? responseData.game.players.map((p: any) => ({...p})) : [] 
+      });
       const fetchedPlayers = responseData.game.players || [];
       const currentUserEmail = auth.currentUser?.email;
-      setPlayers(processPlayersData(fetchedPlayers, currentUserEmail));
+      setPlayers(processPlayersData(fetchedPlayers, responseData.game.playerList || [], currentUserEmail));
     }
     if (responseData.boardState) {
-      setBoardState(responseData.boardState);
+      setBoardState({
+        ...responseData.boardState,
+        vertices: responseData.boardState.vertices ? responseData.boardState.vertices.map((v: any) => ({...v})) : [],
+        edges: responseData.boardState.edges ? responseData.boardState.edges.map((e: any) => ({...e})) : [],
+        hexes: responseData.boardState.hexes ? responseData.boardState.hexes.map((h: any) => ({...h})) : []
+      });
     }
-    // potentially update currentTurn, isSetupPhase etc. based on new gameData
-    if (responseData.game && responseData.game.currentTurn) {
-        setCurrentTurn(responseData.game.currentTurn);
+    if (responseData.currentTurnPlayerId !== undefined) {
+        setCurrentTurn(responseData.currentTurnPlayerId);
+        console.log('[GameRoom] Set currentTurn from responseData.currentTurnPlayerId:', responseData.currentTurnPlayerId);
+    } else if (responseData.game && responseData.game.currentTurnPlayerId !== undefined) {
+        // fallback if it was mistakenly nested under game (less likely based on backend code)
+        setCurrentTurn(responseData.game.currentTurnPlayerId);
+        console.log('[GameRoom] Set currentTurn from responseData.game.currentTurnPlayerId:', responseData.game.currentTurnPlayerId);
+    } else {
+        console.warn('[GameRoom] currentTurnPlayerId not found in setup action response.');
     }
-    // If setup phase is completed based on game logic from backend, update isSetupPhase
-    // Example: if (responseData.game.setupPhaseCompleted) { setIsSetupPhase(false); }
+  };
+
+  const handleRollDiceClick = async () => {
+    if (!gameId || !currentAccountId || currentTurn !== currentAccountId) {
+      console.error('[GameRoom] Cannot roll dice: missing gameId, accountId, or not current turn.');
+      return;
+    }
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        console.error("[GameRoom] No current user found on auth object for roll dice.");
+        return;
+    }
+    const token = await currentUser.getIdToken();
+    if (!token) {
+        console.error("[GameRoom] No auth token found for roll dice.");
+        return;
+    }
+
+    try {
+      console.log(`[GameRoom] Player ${currentAccountId} rolling dice for game ${gameId}.`);
+      const response = await fetch(`http://localhost:8080/api/games/${gameId}/roll-dice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ accountId: currentAccountId }) // send accountId for turn verification
+      });
+
+      if (response.ok) {
+        const responseData = await response.json();
+        console.info('[GameRoom] Dice roll successful, responseData:', responseData);
+        // update game state (gameData for dice roll, player resources via boardState/players)
+        if (responseData.game) {
+          setGameData({
+            ...responseData.game,
+            playerList: [...(responseData.game.playerList || [])],
+            players: responseData.game.players ? responseData.game.players.map((p: any) => ({...p})) : []
+          });
+           const fetchedPlayers = responseData.game.players || [];
+           const currentUserEmail = auth.currentUser?.email;
+           setPlayers(processPlayersData(fetchedPlayers, responseData.game.playerList || [], currentUserEmail));
+        }
+        if (responseData.boardState) {
+          setBoardState({
+            ...responseData.boardState,
+            vertices: responseData.boardState.vertices ? responseData.boardState.vertices.map((v: any) => ({...v})) : [],
+            edges: responseData.boardState.edges ? responseData.boardState.edges.map((e: any) => ({...e})) : [],
+            hexes: responseData.boardState.hexes ? responseData.boardState.hexes.map((h: any) => ({...h})) : []
+          });
+        }
+        if (responseData.diceRoll) {
+            alert(`You rolled: ${responseData.diceRoll.dice1} + ${responseData.diceRoll.dice2} = ${responseData.diceRoll.sum}`);
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to roll dice' }));
+        console.error('[GameRoom] Error rolling dice:', response.status, errorData);
+        alert(`Error rolling dice: ${errorData.message || response.statusText}`);
+      }
+    } catch (error) {
+      console.error('[GameRoom] Exception during dice roll:', error);
+      alert('An exception occurred while rolling the dice.');
+    }
   };
 
   const handleQuitGame = () => {
@@ -645,10 +740,9 @@ const GameRoom = () => {
     navigate('/lobby');
   };
 
-  const PlayerCard = ({ player, isHost }: { player: Player; isHost: boolean }) => {
-    // Host is the first player in the player list
-    // const isHost = game?.playerList[0] === player.id; // Old logic, gameData is better
-    // const isHost = gameData?.playerList[0] === player.id; // Removed: isHost is now a prop
+  const PlayerCard = ({ player, isHost, playerOrder }: { player: Player; isHost: boolean; playerOrder: number }) => {
+    // host is the first player in the player list
+
 
     return (
     <div 
@@ -659,7 +753,7 @@ const GameRoom = () => {
         gameData?.inProgress && currentTurn === player.id && "ring-2 ring-offset-2 ring-offset-blue-100/50" // Only ring if game in progress and current turn
       )}
       style={{
-        borderColor: player.color
+        borderColor: getPlayerColor(playerOrder)
       }}
     >
         {/* Badge Logic: Show 'Waiting' if game NOT in progress, Show 'Current Turn' if game IS in progress AND it's this player's turn */}
@@ -688,8 +782,8 @@ const GameRoom = () => {
               "transition-all duration-200"
             )}
             style={{
-              backgroundColor: player.isCurrentUser ? 'white' : player.color,
-              borderColor: player.color
+              backgroundColor: player.isCurrentUser ? 'white' : getPlayerColor(playerOrder),
+              borderColor: getPlayerColor(playerOrder)
             }}
           />
           <h3 className="text-base font-semibold text-gray-800">
@@ -717,48 +811,31 @@ const GameRoom = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-1 text-xs text-gray-600 mb-2">
-        <div className="flex items-center gap-1">
-          <span>🎲</span>
-            <span>{player.devCards.victoryPoint}</span>
+      {/* Replace the existing grid for VP, Knights, Roads with a new styled one */}
+      <div className="grid grid-cols-3 gap-2 text-gray-700 mb-3">
+        {/* Victory Points */}
+        <div className="flex items-center justify-center gap-1 bg-white/30 backdrop-blur-sm rounded-md p-1.5 shadow border border-gray-300/40">
+          <span className="font-semibold text-sm text-purple-700">V.P.</span>
+          <span className="text-sm font-bold">{player.devCards.victoryPoint}</span>
         </div>
-        <div className="flex items-center gap-1">
-          <span>⚔️</span>
-            <span>{player.devCards.knight}</span>
+        {/* Knights */}
+        <div className="flex items-center justify-center gap-1 bg-white/30 backdrop-blur-sm rounded-md p-1.5 shadow border border-gray-300/40">
+          <span className="text-xl">⚔️</span>
+          <span className="text-sm font-bold">{player.devCards.knight}</span>
         </div>
-        <div className="flex items-center gap-1">
-          <span>🛣️</span>
-            <span>{player.devCards.roadBuilding}</span>
-          </div>
+        {/* Road Building */}
+        <div className="flex items-center justify-center gap-1 bg-white/30 backdrop-blur-sm rounded-md p-1.5 shadow border border-gray-300/40">
+          <span className="text-xl">🛣️</span>
+          <span className="text-sm font-bold">{player.devCards.roadBuilding}</span>
+        </div>
       </div>
 
       {player.isCurrentUser && player.resources && (
         <>
           <Separator className="my-2 bg-gray-200" />
           <div className="space-y-1">
-            <div className="font-medium text-xs text-gray-700">Resources</div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center gap-1 text-gray-700">
-                <span>🧱</span>
-                <span>{player.resources.brick}</span>
-              </div>
-              <div className="flex items-center gap-1 text-gray-700">
-                <span>🌲</span>
-                <span>{player.resources.wood}</span>
-              </div>
-              <div className="flex items-center gap-1 text-gray-700">
-                <span>⛰️</span>
-                <span>{player.resources.ore}</span>
-              </div>
-              <div className="flex items-center gap-1 text-gray-700">
-                <span>🌾</span>
-                <span>{player.resources.wheat}</span>
-              </div>
-              <div className="flex items-center gap-1 text-gray-700">
-                <span>🐑</span>
-                <span>{player.resources.sheep}</span>
-              </div>
-            </div>
+            <div className="font-medium text-xs text-gray-700 mb-2">Resources</div>
+            <ResourceCardsDisplay resources={player.resources} className="justify-start"/>
           </div>
         </>
       )}
@@ -769,17 +846,31 @@ const GameRoom = () => {
   const ActionButtons = () => {
     const currentPlayer = players.find(p => p.isCurrentUser);
     const isCurrentPlayerTurn = currentPlayer && currentTurn === currentPlayer.id;
-    
-    if (!isCurrentPlayerTurn || isSetupPhase || !game?.inProgress) return null;
 
     return (
       <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex flex-col gap-4 items-center z-10">
-        <div className="flex gap-4">
+        {isCurrentPlayerTurn && gameIsTrulyInProgress && (
+          actualIsSetupPhase ? (
+            <div className="text-lg font-semibold p-2 bg-blue-100/70 rounded-md shadow">Setup Phase: Place pieces</div>
+          ) : (
+            // mormal game phase buttons
+            <>
+        <div className="flex flex-wrap justify-center gap-4">
+                <button
+                  onClick={handleRollDiceClick}
+                  className={cn(
+                    "w-36 text-center px-4 py-2 rounded-xl font-medium shadow-lg transition-all",
+                    "bg-white/40 backdrop-blur-sm border border-green-200/50",
+                    "hover:bg-green-50/50"
+                  )}
+                >
+                  🎲 Roll Dice
+                </button>
           <button
             onClick={() => handleActionClick('SETTLEMENT')}
             className={cn(
-              "px-4 py-2 rounded-xl font-medium shadow-lg transition-all",
-              "bg-white/20 backdrop-blur-sm border border-orange-200/50",
+              "w-36 text-center px-4 py-2 rounded-xl font-medium shadow-lg transition-all",
+              "bg-white/40 backdrop-blur-sm border border-orange-200/50",
               selectedAction === 'SETTLEMENT' ? "ring-2 ring-orange-400" : "hover:bg-orange-50/50"
             )}
           >
@@ -788,8 +879,8 @@ const GameRoom = () => {
           <button
             onClick={() => handleActionClick('CITY')}
             className={cn(
-              "px-4 py-2 rounded-xl font-medium shadow-lg transition-all",
-              "bg-white/20 backdrop-blur-sm border border-blue-200/50",
+              "w-36 text-center px-4 py-2 rounded-xl font-medium shadow-lg transition-all",
+              "bg-white/40 backdrop-blur-sm border border-blue-200/50",
               selectedAction === 'CITY' ? "ring-2 ring-blue-400" : "hover:bg-blue-50/50"
             )}
           >
@@ -798,8 +889,8 @@ const GameRoom = () => {
           <button
             onClick={() => handleActionClick('ROAD')}
             className={cn(
-              "px-4 py-2 rounded-xl font-medium shadow-lg transition-all",
-              "bg-white/20 backdrop-blur-sm border border-brown-200/50",
+              "w-36 text-center px-4 py-2 rounded-xl font-medium shadow-lg transition-all",
+              "bg-white/40 backdrop-blur-sm border border-brown-200/50",
               selectedAction === 'ROAD' ? "ring-2 ring-brown-400" : "hover:bg-brown-50/50"
             )}
           >
@@ -807,38 +898,38 @@ const GameRoom = () => {
           </button>
           <button
             onClick={() => handleActionClick('TRADE')}
-            className="px-4 py-2 rounded-xl font-medium shadow-lg transition-all
-                      bg-white/20 backdrop-blur-sm border border-green-200/50
+            className="w-36 text-center px-4 py-2 rounded-xl font-medium shadow-lg transition-all 
+                      bg-white/40 backdrop-blur-sm border border-green-200/50 
                       hover:bg-green-50/50"
           >
             🤝 Trade
           </button>
           <button
             onClick={handleBuyDevCard}
-            className="px-4 py-2 rounded-xl font-medium shadow-lg transition-all
-                      bg-white/20 backdrop-blur-sm border border-yellow-200/50
+            className="w-36 text-center px-4 py-2 rounded-xl font-medium shadow-lg transition-all 
+                      bg-white/40 backdrop-blur-sm border border-yellow-200/50 
                       hover:bg-yellow-50/50"
           >
-            🎲 Buy Dev Card
+                  <span role="img" aria-label="scroll">📜</span> Buy Dev Card 
           </button>
           <button
             onClick={handleEndTurn}
-            className="px-4 py-2 rounded-xl font-medium shadow-lg transition-all
-                      bg-white/20 backdrop-blur-sm border border-purple-200/50
+            className="w-36 text-center px-4 py-2 rounded-xl font-medium shadow-lg transition-all 
+                      bg-white/40 backdrop-blur-sm border border-purple-200/50 
                       hover:bg-purple-50/50"
           >
             ⏭️ End Turn
           </button>
         </div>
 
-        {/* Development Cards */}
+              {/* Development Cards - show if not in setup phase and current turn */}
         {(devCards.knight > 0 || devCards.yearOfPlenty > 0 || devCards.monopoly > 0 || 
-          devCards.roadBuilding > 0 || devCards.victoryPoint > 0) && (
-          <div className="flex gap-2 mt-2">
+                devCards.roadBuilding > 0 || devCards.victoryPoint > 0) &&
+          <div className="flex flex-wrap justify-center gap-2 mt-2">
             {devCards.knight > 0 && (
               <button
                 onClick={() => handlePlayDevCard('knight')}
-                className="px-3 py-1 rounded-lg text-sm font-medium bg-white/20 backdrop-blur-sm
+                className="w-36 text-center px-4 py-2 rounded-xl font-medium shadow-lg bg-white/40 backdrop-blur-sm 
                           border border-red-200/50 hover:bg-red-50/50 transition-all"
               >
                 ⚔️ Knight ({devCards.knight})
@@ -847,7 +938,7 @@ const GameRoom = () => {
             {devCards.yearOfPlenty > 0 && (
               <button
                 onClick={() => handlePlayDevCard('yearOfPlenty')}
-                className="px-3 py-1 rounded-lg text-sm font-medium bg-white/20 backdrop-blur-sm
+                className="w-36 text-center px-4 py-2 rounded-xl font-medium shadow-lg bg-white/40 backdrop-blur-sm 
                           border border-green-200/50 hover:bg-green-50/50 transition-all"
               >
                 📦 Year of Plenty ({devCards.yearOfPlenty})
@@ -856,7 +947,7 @@ const GameRoom = () => {
             {devCards.monopoly > 0 && (
               <button
                 onClick={() => handlePlayDevCard('monopoly')}
-                className="px-3 py-1 rounded-lg text-sm font-medium bg-white/20 backdrop-blur-sm
+                className="w-36 text-center px-4 py-2 rounded-xl font-medium shadow-lg bg-white/40 backdrop-blur-sm 
                           border border-blue-200/50 hover:bg-blue-50/50 transition-all"
               >
                 💰 Monopoly ({devCards.monopoly})
@@ -865,7 +956,7 @@ const GameRoom = () => {
             {devCards.roadBuilding > 0 && (
               <button
                 onClick={() => handlePlayDevCard('roadBuilding')}
-                className="px-3 py-1 rounded-lg text-sm font-medium bg-white/20 backdrop-blur-sm
+                className="w-36 text-center px-4 py-2 rounded-xl font-medium shadow-lg bg-white/40 backdrop-blur-sm 
                           border border-brown-200/50 hover:bg-brown-50/50 transition-all"
               >
                 🛣️ Road Building ({devCards.roadBuilding})
@@ -873,13 +964,16 @@ const GameRoom = () => {
             )}
             {devCards.victoryPoint > 0 && (
               <button
-                className="px-3 py-1 rounded-lg text-sm font-medium bg-white/20 backdrop-blur-sm
+                className="w-36 text-center px-4 py-2 rounded-xl font-medium shadow-lg bg-white/40 backdrop-blur-sm 
                           border border-yellow-200/50"
               >
                 👑 Victory Point ({devCards.victoryPoint})
               </button>
             )}
           </div>
+              }
+            </>
+          )
         )}
       </div>
     );
@@ -889,7 +983,8 @@ const GameRoom = () => {
   const showStartGameButton = gameData && !gameData.inProgress && !gameData.isGameOver && isCurrentUserHost;
 
   return (
-    <div className="h-screen w-screen bg-gradient-to-br from-blue-50 to-blue-100 flex overflow-hidden">
+    <div className="h-screen w-screen bg-gradient-to-br from-slate-200 to-slate-300 flex overflow-hidden">
+      {gameData && !gameIsTrulyInProgress && (
       <button
         onClick={handleQuitGame}
         className="fixed top-4 left-4 z-10 flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-red-600 text-sm font-medium rounded-xl hover:bg-red-50/50 transition-all shadow-lg hover:shadow-xl border border-red-200/50"
@@ -897,6 +992,7 @@ const GameRoom = () => {
         <XCircle size={16} />
         <span>Quit Game</span>
       </button>
+      )}
 
       <div className="flex-1 relative">
         <div className="absolute inset-0">
@@ -912,13 +1008,14 @@ const GameRoom = () => {
                 gameId={Number(gameId)}
                 accountId={currentAccountId}
                 auth={auth}
-                isSetupPhase={isSetupPhase}
+                isSetupPhase={actualIsSetupPhase}
                 isCurrentTurn={currentTurn === players.find(p => p.isCurrentUser)?.id}
                 onPlacementComplete={handleTurnComplete}
                 selectedAction={selectedAction}
                 onActionSelect={handleGameAction}
                 boardState={boardState}
                 gameConfig={gameData}
+                players={players}
                 onSetupActionSuccess={handleSetupActionSuccess}
               />
             )}
@@ -939,10 +1036,18 @@ const GameRoom = () => {
             </button>
           )}
         </div>
+
+        {/* Conditionally render BuildingCosts if game is in progress */}
+        {gameIsTrulyInProgress && !actualIsSetupPhase && (
+          <div className="mb-6">
+            <BuildingCosts />
+          </div>
+        )}
+
         <div className="space-y-4">
-          {players.map(p => {
+          {players.map((p, index) => {
             const isHostForThisCard = gameData && gameData.playerList && gameData.playerList.length > 0 && gameData.playerList[0] === p.id;
-            return <PlayerCard key={p.id} player={p} isHost={isHostForThisCard} />;
+            return <PlayerCard key={p.id} player={p} isHost={isHostForThisCard} playerOrder={index + 1} />;
           })}
         </div>
       </div>
